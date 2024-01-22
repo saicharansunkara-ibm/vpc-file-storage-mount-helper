@@ -1,0 +1,6 @@
+Package: mount.ibmshare-0.0.2
+Version: 0.0.2
+Maintainer: Genctl Share
+Architecture: all
+Description: IBM Mount Share helper
+Depends: python3(>= 3.4), nfs-common

@@ -1,0 +1,2197 @@
+#!/usr/bin/env python3
+##Do not edit created by merge script##
+
+import copy
+import glob
+import os
+import re
+import sys
+import socket
+import subprocess
+import shutil
+import tempfile
+import time
+import logging
+import logging.handlers
+from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from datetime import datetime, timezone
+import argparse
+from enum import Enum
+import fcntl
+from datetime import timedelta
+import json
+import ssl
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+
+
+
+def sleep_msg(secs, msg):
+    print("Wait (" + str(secs) + " secs): " + msg)
+    time.sleep(secs)
+
+
+def decode(val):
+    _val = val.decode(encoding='UTF-8',
+                      errors='replace') if val else ""
+    return _val.strip()
+
+
+def clone_obj(obj):
+    return copy.deepcopy(obj)
+
+
+def make_dirs(fpath, is_file=False):
+    path = fpath
+    if is_file:
+        path, _ = os.path.split(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
+        MountHelperLogger().LogDebug("Folder created:"+path)
+        return path
+    return None
+
+
+def to_utc(dt):
+    return datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, tzinfo=timezone.utc)
+
+
+def utc_format(dt, show_tz=True):
+    if not dt:
+        dt = get_utc_now()
+    fmt = '%Y-%m-%d %H:%M:%S'
+    if show_tz:
+        fmt += " UTC"
+    return dt.strftime(fmt)
+
+
+def get_utc_now(seconds=None, minutes=None):
+    return get_utc_date(datetime.now(timezone.utc), seconds=seconds, minutes=minutes)
+
+
+def get_utc_date(dt, seconds=None, minutes=None, days=None):
+    assert dt is not None
+    if seconds:
+        dt += timedelta(seconds=seconds)
+    if minutes:
+        dt += timedelta(minutes=minutes)
+    if days:
+        dt += timedelta(days=days)
+    return to_utc(dt)
+
+
+def trim(val):
+    if val:
+        return val.strip()
+    return ""
+
+
+def is_empty(val):
+    return len(trim(val)) == 0
+
+
+def to_int(val):
+    val = trim(val)
+    if val.isdigit():
+        return int(val)
+    return 0
+
+
+def get_files_in_folder(src, filter="*"):
+    src = make_filename(src, filter)
+    nfiles = []
+    for file in glob.glob(src):
+        if os.path.isfile(file):
+            nfiles.append(file)
+    return nfiles
+
+
+def make_filename(adir, name):
+    if not adir.endswith("/"):
+        adir += "/"
+    return os.path.join(adir, name)
+
+
+def get_filename(name):
+    _, name = os.path.split(name)
+    return name
+
+
+def get_val_from_text(txt, what, all, comments=None):
+    txt = txt.strip()
+    for line in txt.split("\n"):
+        if comments and line.lstrip().startswith(comments):
+            continue
+        pos = line.lower().find(what.lower())
+        if pos >= 0:
+            pos += len(what)
+            txt = line[pos:]
+            return trim(txt) if all else txt.split()[0]
+    return None
+
+
+class TempFile(object):
+    def __init__(self, data=None, delete=True):
+        self.tf = tempfile.NamedTemporaryFile(
+            delete=delete, dir=LocalInstall.path())
+        self.filename = self.tf.name
+        self.data = data
+
+    def __enter__(self):
+        if self.data:
+            with open(self.filename, "w") as fd:
+                fd.write(self.data)
+        return self
+
+    def read(self):
+        with open(self.filename, "r") as fd:
+            return fd.read()
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        pass
+
+
+class LocalInstall:
+    ipsec_mgr_obj = None
+
+    @staticmethod
+    def set_ipsec_mgr(obj):
+        LocalInstall.ipsec_mgr_obj = obj
+
+    @staticmethod
+    def get_ipsec_mgr():
+        return LocalInstall.ipsec_mgr_obj
+
+    @staticmethod
+    def path():
+        return "/opt/ibm/mount-ibmshare"
+
+    @staticmethod
+    def exists():
+        return os.path.exists(LocalInstall.path())
+
+    @staticmethod
+    def teardown():
+        shutil.rmtree(LocalInstall.path(), ignore_errors=True)
+
+    @staticmethod
+    def setup():
+        make_dirs(LocalInstall.cert_path())
+        return True
+
+    @staticmethod
+    def cert_path():
+        return LocalInstall.make_filename("certs")
+
+    @staticmethod
+    def make_filename(name):
+        return LocalInstall.path() + "/" + name
+
+
+class SysApp:
+    ERR_METADATA_UNAVAILABLE = 1  # check to see if metadata port is open
+    ERR_METADATA_TOKEN = 2  # call to metadata service get token
+    ERR_METADATA_CERT_RENEW = 3  # call to metadata service fails
+    ERR_IPSEC_CFG = 4  # ipsec/swanctl call failure
+    ERR_APP_INSTALL = 5  # install/setup fails
+    ERR_APP_GENERIC = 6  # generic error
+    ERR_NOT_SUPER_USER = 7  # user must be super user
+    ERR_PYTHON_EXCEPTION = 50  # a python exception
+    ERR_MOUNT = 100  # call to mount nfs4 share fails - mount exit value added
+    last_error_code = None
+
+    @ staticmethod
+    def set_code(code):
+        SysApp.last_error_code = code
+        return False
+
+    @ staticmethod
+    def is_none():
+        return SysApp.last_error_code == None
+
+    @ staticmethod
+    def is_code(code):
+        return SysApp.last_error_code == code
+
+    @ staticmethod
+    def exit(ok):
+        if ok:
+            sys.exit(0)
+        else:
+            code = SysApp.last_error_code
+            sys.exit(code if code else SysApp.ERR_APP_GENERIC)
+
+    @ staticmethod
+    def argv(pos=None):
+        if pos:
+            if len(sys.argv) < (pos + 1):
+                return None
+            return sys.argv[pos]
+        return sys.argv
+
+    @ staticmethod
+    def has_arg(arg):
+        args = str(SysApp.argv())
+        return arg in args
+
+    @ staticmethod
+    def is_root():
+        return os.geteuid() == 0
+
+
+class MountHelperLogger:
+    LOG_FILE = LocalInstall.make_filename("mount-ibmshare.log")
+    MAX_SIZE = 1024 * 64
+    MAX_FILES = 2
+    debug_enabled = False
+    use_log_file = False
+    log_store = None
+    log_file = None
+    log_prefix = None
+
+    def init_log_file(self):
+        if not LocalInstall.exists():
+            return None
+        handler = logging.handlers.RotatingFileHandler(
+            self.LOG_FILE,
+            maxBytes=self.MAX_SIZE,
+            backupCount=self.MAX_FILES)
+        log_file = logging.getLogger()
+        log_file.setLevel(logging.INFO)
+        log_file.addHandler(handler)
+        return log_file
+
+    def EnableLogStore(self):
+        MountHelperLogger.log_store = "*\n"
+
+    def HasLogMessage(self, msg):
+        assert MountHelperLogger.log_store
+        return MountHelperLogger.log_store.find(msg) >= 0
+
+    def SetLogToFileEnabled(self):
+        MountHelperLogger.use_log_file = True
+
+    def SetDebugEnabled(self):
+        MountHelperLogger.debug_enabled = True
+
+    def IsDebugEnabled(self):
+        return MountHelperLogger.debug_enabled
+
+    def log_to_file(self, level, msg):
+        if not MountHelperLogger.use_log_file:
+            return
+        if level not in [logging.ERROR, logging.INFO, logging.WARN]:
+            return
+        if not MountHelperLogger.log_file:
+            MountHelperLogger.log_file = self.init_log_file()
+
+        if MountHelperLogger.log_file:
+            fmt_msg = "%s %s %s" % (
+                self.log_prefix, utc_format(None, False), msg)
+            self.log_file.log(level, fmt_msg)
+
+    def _log(self, level, msg):
+        if level == logging.NOTSET:
+            print(msg)
+        else:
+            _level = logging.getLevelName(level).capitalize()
+            fmt_msg = "%-5s - %s" % (_level, msg)
+            print(fmt_msg)
+
+        if MountHelperLogger.log_store:
+            MountHelperLogger.log_store += msg + "\n"
+
+        self.log_to_file(level, msg)
+
+    def LogUser(self, msg):
+        self._log(logging.NOTSET, msg)
+
+    def LogDebug(self, msg):
+        if self.IsDebugEnabled():
+            self._log(logging.DEBUG, msg)
+
+    def LogInfo(self, msg):
+        self._log(logging.INFO, msg)
+
+    def LogError(self, msg, code=None):
+        self._log(logging.ERROR, msg)
+        if code:
+            SysApp.set_code(code)
+        return False
+
+    def LogWarn(self, msg):
+        self._log(logging.WARN, msg)
+
+    def LogException(self, action, ex, extra=None):
+        err = str(ex)
+        if extra:
+            msg = "Exception: (%s) %s - %s" % (err, action, extra)
+        else:
+            msg = "Exception: (%s) %s" % (err, action)
+
+        self.LogError(msg, code=SysApp.ERR_PYTHON_EXCEPTION)
+
+
+class SubProcess(MountHelperLogger):
+    def __init__(self, cmd):
+        if isinstance(cmd, str):
+            cmd = cmd.split()
+        assert isinstance(cmd, list)
+        self.cmd = cmd
+        self.set_output(-1, None, None)
+
+    def set_output(self, ret, stdout, stderr):
+        self.returncode = ret
+        self.stderr = decode(stderr)
+        self.stdout = decode(stdout)
+        return self
+
+    def show_output(self):
+        msg = "Cmd: %s\nRetCode: %d\nStdError: %s\nStdOut: %s\n" % (
+            self.cmd, self.returncode, self.stderr, self.stdout)
+        print(msg)
+
+    def get_error(self):
+        if self.is_error():
+            msg = "RunCmd Failed: ExitCode(%d) StdError(%s) Cmd(%s)" % (
+                self.returncode, self.stderr, self.cmd_to_str())
+            return msg.replace("StdError() ", "")
+        return None
+
+    def is_error(self):
+        return self.returncode != 0
+
+    def cmd_to_str(self):
+        return ' '.join(self.cmd)
+
+    def get_stdout_val(self, what, all=False):
+        return get_val_from_text(self.stdout, what, all)
+
+    def get_stderr_val(self, what, all=False):
+        return get_val_from_text(self.stderr, what, all)
+
+    def stream(self):
+        try:
+            self.LogDebug("Stream: " + self.cmd_to_str())
+            with subprocess.Popen(
+                    # self.cmd_to_str(),
+                    self.cmd,
+                    # shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE) as proc:
+                self.LogDebug("Waiting for ouput......")
+
+                for line in iter(proc.stdout.readline, b''):
+                    if line:
+                        txt = line.decode().strip("\r\n") + "\n"
+                        sys.stdout.write(txt)
+                proc.wait()
+                return self.set_output(proc.returncode, "", "")
+        except Exception as ex:
+            self.LogException(ex, "Stream")
+        return None
+
+    def run(self):
+        if sys.version_info[:2] < (3, 5):
+            proc = subprocess.Popen(
+                self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (stdout, stderr) = proc.communicate()
+            return self.set_output(proc.returncode, stdout, stderr)
+
+        out = subprocess.run(self.cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        return self.set_output(out.returncode, out.stdout, out.stderr)
+
+
+class MountHelperBase(MountHelperLogger):
+
+    def __init__(self):
+        pass
+
+    def wait(self, secs, msg):
+        self.LogInfo("Wait (" + str(secs) + " secs): " + msg)
+        time.sleep(secs)
+
+    def FileExists(self, fpath, log=False):
+        ret = os.path.exists(fpath)
+        if not ret and log:
+            self.LogDebug("FileNotExist:" + fpath)
+        return ret
+
+    def MakeDirForFile(self, dst):
+        make_dirs(dst, is_file=True)
+
+    def CopyFile(self, src, dst, mkdir=False):
+        if self.FileExists(src):
+            try:
+                if mkdir:
+                    self.MakeDirForFile(dst)
+                shutil.copyfile(src, dst)
+                return True
+            except Exception as ex:
+                self.LogException('CopyFile:', ex)
+
+        return False
+
+    def CleanupDir(self, dpath, filter="*", remove_empty=True):
+        if os.path.exists(dpath):
+            files = get_files_in_folder(dpath, filter)
+            if len(files) > 0:
+                self.LogDebug("Cleanup folder:"+dpath)
+                for file in files:
+                    os.remove(file)
+            if remove_empty and not os.listdir(dpath):
+                os.rmdir(dpath)
+
+    def RemoveFile(self, fpath):
+        if self.FileExists(fpath):
+            os.remove(fpath)
+
+    def ReadFile(self, fpath, log=True):
+        if not self.FileExists(fpath, log=True):
+            return None
+
+        if log:
+            self.LogDebug("ReadFile:" + fpath)
+        try:
+            with open(fpath, "r") as fp:
+                return fp.read()
+        except Exception as ex:
+            self.LogException('ReadFile:', ex, fpath)
+        return None
+
+    def WriteFile(self, fpath, data, mkdir=False, chmod=None):
+        self.LogDebug("WriteFile:" + fpath)
+        try:
+            if mkdir:
+                self.MakeDirForFile(fpath)
+
+            with open(fpath, "w") as fp:
+                fp.write(data)
+            if chmod:
+                os.chmod(fpath, chmod)
+
+        except Exception as ex:
+            self.LogException('WriteFile:', ex, fpath)
+            return False
+
+        return True
+
+    def FileNoChange(self, fpath, data):
+        if self.FileExists(fpath):
+            old_data = self.ReadFile(fpath, log=False)
+            return old_data == data
+        return False
+
+    def RunSilent(self, cmd):
+        out = SubProcess(cmd).run()
+        return out
+
+    def RunCmd(self, cmd, descr, ret_out=False):
+        proc = SubProcess(cmd)
+
+        try:
+            msg = proc.cmd_to_str()
+            if not is_empty(descr):
+                msg = "%s (%s)" % (descr, msg)
+            self.LogDebug("RunCmd: " + msg)
+            output = proc.run()
+            if output.is_error():
+                self.LogError(output.get_error())
+                if ret_out:
+                    return output
+            else:
+                #self.LogDebug("Successfully executed:"+descr)
+                return output
+
+        except KeyboardInterrupt:
+            self.LogError("Keyboard Interrupt caught")
+        except Exception as ex:
+            self.LogException('RunCmd:', ex, descr)
+
+        return None
+
+
+class SystemCtl(MountHelperBase):
+    EXE_PATH = "/bin/systemctl"
+    SYSTEMD_VERSION_SUPPORTS_UTC = 228
+
+    def __init__(self, name):
+        self.name = name
+        self.SetDebugEnabled()
+
+    def restart(self):
+        self.action("enable")
+        return self.action("restart")
+
+    def enable(self):
+        # --now does not work on older systems
+        self.action("enable")
+        return self.start()
+
+    def disable(self):
+        # --now does not work on older systems
+        self.stop()
+        return self.action("disable")
+
+    def stop(self):
+        return self.action("stop")
+
+    def start(self):
+        return self.action("start")
+
+    def status(self):
+        return self.action("status")
+
+    def show_status(self):
+        out = self.status()
+        if out:
+            out.show_output()
+
+    def is_active(self):
+        out = self.action('is-active', silent=True)
+        return out.stdout == 'active' if out else False
+
+    def systemd_supports_utc(self):
+        return self.systemd_version() >= self.SYSTEMD_VERSION_SUPPORTS_UTC
+
+    def systemd_version(self):
+        version = get_app_version(self.EXE_PATH, "systemd")
+        return to_int(version) if version else 0
+
+    def action(self, action, arg=None, silent=False):
+        cmd = [self.EXE_PATH, action]
+        if arg:
+            cmd.append(arg)
+        cmd.append(self.name)
+        if silent:
+            return self.RunSilent(cmd)
+        return self.RunCmd(cmd, "")
+
+
+class NfsMount(MountHelperBase):
+    MOUNT_OUTPUT_FIELDS_SIZE = 5
+    MOUNT_TYPE_NFS = 'nfs'
+    MOUNT_TYPE_NFS4 = 'nfs4'
+    NFS_PATH_INDEX = 0
+    MOUNTED_AT = 2
+    HOST_INDEX = 0
+    PATH_INDEX = 1
+    SOURCE_ARGS_LENGTH = 2
+    MOUNT_LIST_NFS_CMD = ["mount", "-t nfs,nfs4"]
+
+    def __init__(self, ip=None, mount_path=None, mounted_at=None):
+        self.ip = ip
+        self.mount_path = mount_path
+        self.mounted_at = mounted_at
+
+    def load_nfs_mounts(self):
+        result = self.RunCmd(NfsMount.MOUNT_LIST_NFS_CMD, "ListNfsMounts")
+        if not result:
+            return None
+
+        lines = result.stdout.splitlines()
+        mounts = []
+        # Parse mount command output line by line and search for ip address and mount path.
+        for line in lines:
+            mount = self.get_nfs_mount(line)
+            if mount:
+                mounts.append(mount)
+
+        self.LogDebug("Existing nfs/nfs4 mounts found:" + str(len(mounts)))
+        return mounts
+
+    def get_nfs_mount(self, line):
+        mount_fields = line.split(" ")
+        if len(mount_fields) >= NfsMount.MOUNT_OUTPUT_FIELDS_SIZE:
+            if NfsMount.MOUNT_TYPE_NFS in mount_fields or NfsMount.MOUNT_TYPE_NFS4 in mount_fields:
+                ip, mount_path = NfsMount.extract_source(
+                    mount_fields[NfsMount.NFS_PATH_INDEX])
+                if ip and mount_path:
+                    return NfsMount(ip, mount_path, mount_fields[NfsMount.MOUNTED_AT])
+        return None
+
+    @ staticmethod
+    def extract_source(src):
+        if len(src) > 0:
+            host_path = src.split(":")
+            if len(host_path) >= NfsMount.SOURCE_ARGS_LENGTH:
+                mount_path = host_path[NfsMount.PATH_INDEX]
+                try:
+                    ip = socket.gethostbyname(host_path[NfsMount.HOST_INDEX])
+                    return ip, mount_path
+                except:
+                    pass
+        return None, None
+
+
+def extract_version(ver):
+    str = ""
+    for a in trim(ver):
+        if a.isdigit() or a == ".":
+            str += a
+        elif len(str) > 0:
+            break
+    str = str.strip(".")
+    return None if is_empty(str) else str
+
+
+def get_app_version(app, tag, vcmd="--version"):
+    if os.path.exists(app):
+        cmd = SubProcess([app, vcmd])
+        if cmd.run():
+            if not cmd.is_error():
+                return extract_version(cmd.get_stdout_val(tag))
+    return None
+
+
+def version_compare(version1, version2):
+    assert not is_empty(version1)
+    assert not is_empty(version2)
+
+    def cmp(a, b):
+        return (a > b) - (a < b)
+
+    def fix(v):
+        return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
+    return cmp(fix(version1), fix(version2))
+
+
+class ConfigEditor(MountHelperBase):
+    def __init__(self, fname):
+        self.name = fname
+        self.data = None
+
+    def exists(self):
+        return self.FileExists(self.name)
+
+    def read(self):
+        self.data = self.ReadFile(self.name)
+        return not is_empty(self.data)
+
+    def write(self):
+        return self.WriteFile(self.name, self.data)
+
+    def comment(self, data):
+        self.data = "%s\n# %s" % (self.data, data)
+
+    def append(self, data):
+        self.data = "%s\n%s" % (self.data, data)
+
+    def add_val(self, name, value):
+        if self.get_val(name):
+            return False
+
+        self.append("%s = %s" % (name, value))
+        return self.write()
+
+    def get_val(self, name, all=True):
+        data = self.data.replace(" ", "")
+        return get_val_from_text(data, name + "=", all, "#")
+
+
+class RootCert(object):
+    def __init__(self, region, fname):
+        self.region = region
+        self.fname = fname
+
+    @staticmethod
+    def find(files, region):
+        for file in files:
+            if region == file.region:
+                return file
+        return None
+
+    @staticmethod
+    def sort(files):
+        def get_key(o):
+            return o.region
+        files.sort(key=get_key)
+
+
+class ShareConfig(ConfigEditor):
+    conf_path = "/etc/ibmcloud"
+
+    def __init__(self, path, cert_path=".", show_error=True):
+        self.name = make_filename(
+            path if path else self.conf_path, "share.conf")
+        self.data = ""
+        self.cert_path = cert_path
+        self.show_error = show_error
+
+    def load_files(self):
+        pfx = "type_ibmshare_root_"
+        files = get_files_in_folder(self.cert_path, pfx + "*.*")
+        if len(files) == 0:
+            return self.LogError("Ensure root CA certs are present in: " + self.cert_path)
+
+        regions = []
+        for file in files:
+            start = file.find(pfx)
+            start += len(pfx)
+            stop = file.rfind('.')
+            assert start > 0 and stop > start
+            region = file[start:stop]
+            region = RootCert(region.lower(), file)
+            if not RootCert.find(regions, region):
+                regions.append(region)
+        return regions
+
+    def create(self):
+        self.LogInfo("Generate config file: "+self.name)
+        files = self.load_files()
+        if not files:
+            return False
+        RootCert.sort(files)
+        self.comment("all - install all certificates")
+        self.comment("region list - use any combination")
+
+        for file in files:
+            self.comment(file.region)
+
+        self.append("\nregion=\n")
+        return self.write()
+
+    def error(self, msg):
+        msg = "%s (%s)" % (msg, self.name)
+        self.LogError(msg)
+        return None
+
+    def get_region(self):
+        if self.read():
+            return self.get_val("region")
+        return None
+
+    def get_certificate_duration(self):
+        if self.read():
+            return self.get_val("certificate_duration_seconds", False)
+        return None
+
+    def load_regions(self):
+        regions = self.get_region()
+        if regions:
+            regions = regions.lower().split(",")
+        if not regions or len(regions) == 0:
+            return self.error("No regions found in:")
+
+        if (len(regions) > 1) and ("all" in regions):
+            return self.error("Only one region entry allowed if using 'all': " + str(regions))
+        return regions
+
+    def get_files_for_regions(self, regions):
+        if not os.path.exists(self.cert_path):
+            return self.LogError("Root certs directory is missing: " + self.cert_path)
+
+        install_cas = []
+        files = self.load_files()
+        if files:
+            for region in regions:
+                if region in ["all"]:
+                    if len(files) == 0:
+                        return self.error("No regions found for selector: " + region)
+                    return files
+                else:
+                    file = RootCert.find(files, region)
+                    if not file:
+                        return self.error("No root CA cert found for region: " + region)
+                    install_cas.append(file)
+
+        return install_cas if len(install_cas) > 0 else None
+
+
+
+
+class IpsecConfigBase(MountHelperBase):
+    CLEANUP_FILE_MIN_AGE_MINS = 60
+    VERSION = None
+
+    def __init__(self):
+        self.is_reload = False
+
+    def private_key_filename(self):
+        name = "type_ibmshare.key"
+        return make_filename(self.KEY_FILE_PATH, name)
+
+    def read_private_key(self):
+        return self.ReadFile(self.private_key_filename())
+
+    def read_cert(self):
+        return self.ReadFile(self.cert_filename())
+
+    def cert_filename(self, name_only=False):
+        name = "type_ibmshare.pem"
+        if name_only:
+            return name
+        return make_filename(self.CERT_PATH, name)
+
+    def root_cert_folder(self):
+        return self.ROOT_CA_PATH
+
+    def root_cert_filenames(self, region=""):
+        filter = "type_ibmshare_root*%s*.*" % region
+        return get_files_in_folder(self.root_cert_folder(), filter)
+
+    def int_ca_filename(self, name_only=False):
+        name = "type_ibmshare_int.crt"
+        if name_only:
+            return name
+        return make_filename(self.INT_CA_PATH, name)
+
+    def root_ca_filename(self):
+        root_ca_certs = self.root_cert_filenames()
+        if len(root_ca_certs) > 0:
+            return root_ca_certs[0]
+        return None
+
+    def read_int_ca(self):
+        return self.ReadFile(self.int_ca_filename())
+
+    def get_config_template_text(self):
+        return self.IPSEC_CONFIG_TEXT
+
+    def get_config_template_file(self, ip):
+        name = "type_ibmshare_" + ip + ".conf"
+        return make_filename(self.IPSEC_CONFIG_PATH, name)
+
+    def get_config_file_parts(self):
+        return self.IPSEC_CONFIG_PATH, "type_ibmshare_", ".conf"
+
+    def get_config(self, ip):
+        fname = self.get_config_template_file(ip)
+        return fname if self.FileExists(fname) else None
+
+    def remove_config(self, ip):
+        fname = self.get_config(ip)
+        if fname:
+            self.LogDebug("Removing unused config file: "+fname)
+            self.RemoveFile(fname)
+            self.is_reload = True
+
+    def connection_name(self, ip):
+        return "ibmshare-ipsec-to-" + ip.replace(".", "-")
+
+    def create_config(self, ip):
+        tags = {}
+
+        tags["REMOTE_IP"] = ip
+        tags["CONNECTION_NAME"] = self.connection_name(ip)
+        tags["CLIENT_CERT_FILE"] = self.cert_filename()
+
+        vdata = "# %s - Version %s\n" % (self.NAME, self.VERSION)
+        cfg_path = self.get_config_template_file(ip)
+        cfg_data = vdata + self.get_config_template_text()
+
+        for name, value in tags.items():
+            tag = "<" + name + ">"
+            # assert cfg_data.find(tag) >= 0
+            cfg_data = cfg_data.replace(tag, value)
+
+        try:
+            # if file exists and data the same
+            # update the file modify time so it doesnt get deleted
+            # before the mount operation completes
+            if self.FileNoChange(cfg_path, cfg_data):
+                self.LogDebug("Config data unchanged:" + cfg_path)
+                dt_epoch = datetime.now().timestamp()
+                os.utime(cfg_path, (dt_epoch, dt_epoch))
+                return True
+
+            if self.WriteFile(cfg_path, cfg_data, mkdir=True):
+                self.LogDebug("Config file created ok:" + cfg_path)
+                self.is_reload = True
+                return True
+        except Exception as ex:
+            self.LogException("CreateConfig"+self.NAME, ex)
+        return False
+
+    # Remove any unused config files
+    def cleanup_unused_configs(self, mounts,
+                               age=None):
+        if mounts is None:
+            mounts = NfsMount().load_nfs_mounts()
+
+        cfg_path, cfg_prefix, cfg_postfix = self.get_config_file_parts()
+
+        def file_created_recently(fname, max_mins):
+            if max_mins == 0:  # ignore file time
+                return False
+            st = os.stat(fname)
+            fmod_time = datetime.fromtimestamp(st.st_mtime)
+            duration = datetime.now() - fmod_time
+            fmins, _ = divmod(duration.seconds, 60)
+            return fmins <= max_mins
+
+        def get_filename_ip(fname):
+            if not fname.startswith(cfg_prefix):
+                return None
+            fname = fname.replace(cfg_prefix, "")
+            return fname.replace(cfg_postfix, "")
+
+        cnts = [0, 0, 0, 0]  # all/mounted/deleted/recent
+
+        def inc_cnt(pos):
+            nonlocal cnts
+            cnts[pos] += 1
+
+        files = []
+        if os.path.exists(cfg_path):
+            files = os.listdir(cfg_path)
+        for file in files:
+            inc_cnt(0)
+            file_ip = get_filename_ip(file)
+            if not file_ip:
+                continue
+            got = False
+            for mount in mounts:
+                if mount.ip == file_ip:
+                    got = True
+                    break
+            if got:
+                inc_cnt(1)
+            else:
+                fname = make_filename(cfg_path, file)
+                # dont delete files created recently - a mount might be happening
+                if age is None:
+                    age = self.CLEANUP_FILE_MIN_AGE_MINS
+
+                if not file_created_recently(fname, age):
+                    self.remove_config(file_ip)
+                    inc_cnt(2)
+                else:
+                    inc_cnt(3)
+
+        msg = "%s cleanup config files Total(%s) Mounted(%d) Deleted(%d) Recent(%d)" % (
+            self.NAME, cnts[0], cnts[1], cnts[2], cnts[3])
+        self.LogDebug(msg)
+        hasActiveMounts = cnts[1] != 0 or cnts[3] != 0
+        return hasActiveMounts
+
+    def _reload_certs(self, args):
+        if self.is_reload:
+            if not self.IpsecCmd(args, "ReloadCerts"):
+                return False
+            self.is_reload = False
+        return True
+
+    def _reload_config(self, args):
+        if self.is_reload:
+            if not self.IpsecCmd(args, "ReloadConfig"):
+                return False
+            self.is_reload = False
+        return True
+
+    def IpsecCmd(self, args, descr=""):
+        cmd = self.EXE_PATH + " " + args
+        if not self.RunCmd(cmd, descr):
+            return SysApp.set_code(SysApp.ERR_IPSEC_CFG)
+        return True
+
+    def remove_all_configs(self, unused=False):
+        if unused:
+            return self.cleanup_unused_configs(None, 0)
+        else:
+            self.CleanupDir(self.IPSEC_CONFIG_PATH)
+
+    def flatten_paths(self, path):
+        if not os.path.exists(path):
+            return self.LogError("FolderNotExist: " + path)
+        self.ROOT_CA_PATH = path
+        self.INT_CA_PATH = path
+        self.KEY_FILE_PATH = path
+        self.CERT_PATH = path
+        self.IPSEC_CONFIG_PATH = path
+        return True
+
+    def remove_all_certs(self,root=False):
+        self.CleanupDir(self.ROOT_CA_PATH)
+        if root:
+            return
+        self.CleanupDir(self.INT_CA_PATH)
+        self.CleanupDir(self.KEY_FILE_PATH)
+        self.CleanupDir(self.CERT_PATH)
+
+    def install_root_cert(self, name, data):
+        fname = make_filename(self.root_cert_folder(), name)
+        return self.write_cert(fname, data)
+
+    def write_cert(self, fname, data):
+        if self.FileNoChange(fname, data):
+            self.LogDebug("Cert File NoChange:" + fname)
+        else:
+            if not self.WriteFile(fname, data, mkdir=True):
+                return False
+            self.is_reload = True
+        return True
+
+    def write_new_certs(self, cert, private_key, cert_int_ca):
+        ret = False
+        self.LogDebug("Renewing cert files")
+        if self.write_cert(self.private_key_filename(), private_key):
+            if self.write_cert(self.int_ca_filename(), cert_int_ca):
+                if self.write_cert(self.cert_filename(), cert):
+                    ret = True
+                    if self.is_reload:
+                        self.LogInfo("Certificates updated successfully")
+                        return self.reload_config()
+        return ret
+
+    def set_version(self):
+        self.VERSION = get_app_version(self.EXE_PATH, self.VERSION_TAG)
+        if self.VERSION:
+            self.LogInfo("IpSec using %s(%s)" % (self.NAME, self.VERSION))
+        return self.VERSION
+
+
+class StrongSwanConfig(IpsecConfigBase):
+    def config_path():
+        path = "/etc/swanctl"
+        if not os.path.exists(path):
+            # on some installs eg (Rocky)
+            path = "/etc/strongswan/swanctl"
+        return path
+
+    NAME = "StrongSwan"
+    VERSION_TAG = "swanctl"
+    EXE_PATH = "/usr/sbin/swanctl"
+    CONFIG_PATH = config_path()
+    ROOT_CA_PATH = CONFIG_PATH + '/x509ca'
+    INT_CA_PATH = ROOT_CA_PATH
+    KEY_FILE_PATH = CONFIG_PATH + '/private'
+    CERT_PATH = CONFIG_PATH + '/x509'
+    IPSEC_CONFIG_PATH = CONFIG_PATH + '/conf.d'
+    IPSEC_CONFIG_TEXT = """connections {
+    <CONNECTION_NAME> {
+        children {
+            <CONNECTION_NAME> {
+                esp_proposals = aes256gcm16
+                mode = transport
+                start_action = trap
+                remote_ts = <REMOTE_IP>[any/any]
+                local_ts = 0.0.0.0/0[any/any]
+                rekey_time = 3600
+                rekey_bytes = 0
+            }
+        }
+        keyingtries = 3
+        version = 2
+        remote_addrs = <REMOTE_IP>
+        rekey_time = 3600
+        encap = yes
+        proposals = aes256-sha384-ecp384
+        local {
+            certs = <CLIENT_CERT_FILE>
+        }
+        remote {
+        id = %any
+        }
+    }
+}
+"""
+
+    def set_version(self):
+        if os.path.exists(self.EXE_PATH):
+            if not super().set_version():
+                # can happen with swanctl service error
+                self.VERSION = "Undefined"
+            return True
+
+        return False
+
+    def reload_certs(self, root=False):
+        return self._reload_certs("--load-creds")
+
+    def reload_config(self):
+        return self._reload_config("--load-all")
+
+    def list_connections(self):
+        return self.IpsecCmd("--list-conns")
+
+    def setup(self):
+        return self.start()
+
+    def is_running(self):
+        return self.start()
+
+    def start(self, max_secs=10):
+        ss = SystemCtl("strongswan")
+        secs = 0
+        while secs <= max_secs:
+            if not ss.is_active():
+                self.LogInfo("Starting Strongswan Ipsec")
+                if not ss.enable():
+                    return False
+                time.sleep(1)
+            # just to verify that swanctl is running ok
+            if self.list_connections():
+                return True
+            self.wait(2, "Ipsec starting")
+            secs += 2
+        return self.LogError("Unable to start IPsec, check charon logs")
+
+
+
+RSA_KEY_LENGTH = 4096
+CERT_VALID_LIFE_REMAINS = 0.3
+OPENSSL_CSR_SUBJECT = "/C=US/ST=IL/L=Chicago/O=IBM Corporation/OU=IBM Software Group"
+ALERT_CA_BEFORE = 270
+
+
+class CryptoX509:
+    def __init__(self):
+        self.not_after = None
+        self.not_before = None
+        self.subject = None
+        self.issuer = None
+
+    def set_subject(self, data):
+        self.subject = data
+
+    def set_issuer(self, data):
+        self.issuer = data
+
+    def convert_date(self, dt):
+        if dt:
+            dt = datetime.strptime(dt, "%b %d %H:%M:%S %Y GMT")
+            dt = to_utc(dt)
+        return dt
+
+    def set_dates(self, nbefore, nafter):
+        self.not_before = self.convert_date(nbefore)
+        self.not_after = self.convert_date(nafter)
+        return self.not_before and self.not_after
+
+
+class CertificateHandler(MountHelperBase):
+    """Class to handle certificate expiration."""
+
+    def __init__(self):
+        self.token = ''
+        self.crypto_x509 = None
+
+    def get_ipsec_mgr(self):
+        if not LocalInstall.get_ipsec_mgr():
+            raise Exception("Ipsec not installed")
+        return LocalInstall.get_ipsec_mgr()
+
+    def is_loaded(self):
+        return not (self.crypto_x509 is None)
+
+    def cert_filename(self):
+        return self.get_ipsec_mgr().cert_filename()
+
+    def int_ca_filename(self):
+        return self.get_ipsec_mgr().int_ca_filename()
+
+    def root_ca_filename(self):
+        return self.get_ipsec_mgr().root_ca_filename()
+
+    # root CA cert must be installed
+    def root_cert_installed(self):
+        return len(self.get_ipsec_mgr().root_cert_filenames()) > 0
+
+    def load_certificate(self):
+        return self.load_certificate_by_filename(self.cert_filename())
+
+    def load_int_ca_certificate(self):
+        return self.load_certificate_by_filename(self.int_ca_filename())
+
+    def load_root_ca_certificate(self):
+        return self.load_certificate_by_filename(self.root_ca_filename())
+
+    def run_openssl(self, cmd, descr):
+        openssl_cmd = ["openssl"] + cmd
+        return self.RunCmd(openssl_cmd, descr)
+
+    def load_certificate_by_filename(self, fpath):
+        self.crypto_x509 = None
+        if self.FileExists(fpath):
+            out = self.run_openssl(["x509", "-in", fpath, "-noout", "-dates","-subject","-issuer"],
+                                   "LoadCert")
+            if out:
+                crt = CryptoX509()
+                if crt.set_dates(out.get_stdout_val("notBefore=", True),
+                                 out.get_stdout_val("notAfter=", True)):
+                    crt.set_subject(out.get_stdout_val("subject=", True))
+                    crt.set_issuer(out.get_stdout_val("issuer=", True))
+                    self.crypto_x509 = crt
+        return self.is_loaded()
+
+    def get_subject(self):
+        return self.crypto_x509.subject
+
+    def get_issuer(self):
+        return self.crypto_x509.issuer
+
+    def load_cert(self, data):
+        try:
+            with TempFile(data) as cert:
+                return self.load_certificate_by_filename(cert.filename)
+        except Exception as ex:
+            self.LogException('LoadX509Certificate', ex)
+        return None
+
+    def get_certificate_not_after_date(self):
+        if not self.is_loaded():
+            return None
+        return self.crypto_x509.not_after
+
+    def get_certificate_not_before_date(self):
+        if not self.is_loaded():
+            return None
+        return self.crypto_x509.not_before
+
+    def get_current_time(self):
+        return get_utc_now()
+
+    def check_ca_certs_validity(self, ca_cert = ""):
+        assert self.is_loaded()
+        before = self.get_certificate_not_before_date()
+        after = self.get_certificate_not_after_date()
+ 
+        diff = after - before
+        days = divmod(diff.total_seconds(), 60*60*24)
+
+        alert_at = get_utc_date(after, days=-ALERT_CA_BEFORE)
+        if alert_at < self.get_current_time():
+            self.LogWarn(ca_cert + " CA certificate will be expired at: " + str(after) +
+                         " Download the latest mount helper version")
+        return True
+
+    def get_cert_renewal_date(self):
+        assert self.is_loaded()
+        before = self.get_certificate_not_before_date()
+        after = self.get_certificate_not_after_date()
+
+        diff = after - before
+        mins = divmod(diff.total_seconds(), 60)
+        renew_mins = mins[0] * CERT_VALID_LIFE_REMAINS
+
+        # we can renew cert from this date
+        can_renew_at = get_utc_date(after, minutes=-renew_mins)
+        self.LogDebug("Certificate will be renewed at: " +
+                      utc_format(can_renew_at))
+        return can_renew_at
+
+    def is_certificate_expired(self):
+        exp = self.get_certificate_not_after_date()
+        if exp < self.get_current_time():
+            self.LogWarn("Certificate expired at: " +
+                         utc_format(exp))
+            return True
+        return False
+
+    def is_certificate_eligible_for_renewal(self):
+        if not self.is_loaded():
+            return None
+        if self.is_certificate_expired():
+            return True
+        return self.get_cert_renewal_date() <= self.get_current_time()
+
+    # Method to get timestamp when certs will be renewed.
+    def get_certificate_renew_timestamp(self):
+        if not self.is_loaded():
+            return None
+
+        if self.is_certificate_expired():
+            return self.get_current_time()
+
+        rdate = self.get_cert_renewal_date()
+        if rdate < self.get_current_time():
+            return self.get_current_time()
+
+        return rdate
+
+    def load_private_key(self, data):
+        try:
+            if not is_empty(data):
+                with TempFile(data) as key:
+                    if self.run_openssl(["rsa", "-in", key.filename, "-check"],
+                                        "LoadPrivateKey"):
+                        return key
+        except Exception as ex:
+            self.LogException('LoadX509PrivateKey', ex)
+        return None
+
+    def generate_private_key(self):
+        with TempFile() as key:
+            out = self.run_openssl(["genpkey",
+                                    "-algorithm", "RSA",
+                                   "-out", key.filename,
+                                    "-outform", "PEM",
+                                    "-pkeyopt", "rsa_keygen_bits:" + str(RSA_KEY_LENGTH)],
+                                   "GenPrivateKey")
+            if out:
+                return key.read()
+        return None
+
+    # a helper function to check csr is ok
+    def validate_csr(self, csr_txt):
+        csr_txt = csr_txt.replace("\\n", "\n")
+        with TempFile(csr_txt) as csr:
+            cmd = ["req", "-in", csr.filename, "-text", "-noout", "-verify"]
+            out = self.run_openssl(cmd, "CheckCSR")
+            return out is not None
+
+    def get_digest(self):
+        return "-sha256"
+
+    def generate_csr(self, private_key):
+        # openssl req -out server.csr -key server.key -new
+        digest = self.get_digest()
+        with TempFile(private_key) as key:
+            with TempFile() as csr:
+                cmd = ["req", "-nodes", digest, "-new",
+                       "-subj", OPENSSL_CSR_SUBJECT,
+                       "-out", csr.filename,
+                       "-key", key.filename]
+                out = self.run_openssl(cmd, "GenCSR")
+                if out:
+                    csr_txt = csr.read()
+                    csr_txt = csr_txt.replace("\n", "\\n")
+                    return csr_txt
+        return None
+
+
+ESSENTIAL_OPTIONS = 'sec=sys,nfsvers=4.1'
+MOUNT = 'mount'
+NFS_VERSION = 'nfs4'
+MOUNT_T_OPTION = '-t'
+MOUNT_O_OPTION = '-o'
+MOUNT_VERBOSE_FLAG = '-v'
+RENEW_CERTIFICATE_FLAG = "-RENEW_CERTIFICATE_NOW"
+INSTALL_ROOT_CERT = "-INSTALL_ROOT_CERT"
+SECURE_OPTION = 'secure'
+SECURE_ARG = 'true'
+SBIN_SCRIPT = "/sbin/mount.ibmshare"
+TEARDOWN_APP = "-TEARDOWN_APP"
+
+
+class AppRunType(object):
+    SETUP = "SUP"
+    TEARDOWN = "TDN"
+    RENEW = "REN"
+    MOUNT = "MNT"
+
+    def __init__(self, value):
+        self.value = value
+
+    def is_setup(self):
+        return self.value == self.SETUP
+
+    def is_teardown(self):
+        return self.value == self.TEARDOWN
+
+    def is_renew(self):
+        return self.value == self.RENEW
+
+    def is_mount(self):
+        return self.value == self.MOUNT
+
+
+class ArgsHandler(MountHelperBase):
+    """Class to process nfs mount command arguments."""
+    mount_args = None
+
+    def __init__(self):
+        self.ip_address = None
+        self.mount_point = None
+        self.mount_path = None
+        self.mount_source = None
+        self.options = None
+        self.is_secure = False
+
+    def parse(self):
+        is_error = False
+
+        def parse_error(errmsg):
+            nonlocal is_error
+            is_error = True
+            self.LogError(errmsg)
+        parser = argparse.ArgumentParser()
+        parser.error = parse_error
+        parser.add_argument('Source', default="")  # nfs_host:path
+        parser.add_argument('Destination', default="")  # mount point
+        parser.add_argument('-o', default="")
+        args, _ = parser.parse_known_args()
+        if is_error:
+            return False
+        self.mount_source = args.Source
+        self.mount_point = args.Destination
+        self.ip_address, self.mount_path = NfsMount.extract_source(
+            self.mount_source)
+        if not self.ip_address or not self.mount_path:
+            return self.LogError('Provide the mount source as <nfs_host>:<path>(' + self.mount_source + ').')
+        if len(self.mount_point) <= 0:
+            return self.LogError("Provide the mount point to mount on local host.")
+        self.options, self.is_secure = self.get_mount_options(args.o)
+        return True
+
+    @staticmethod
+    def get_mount_args():
+        args = ArgsHandler()
+        return args if args.parse() else None
+
+    @staticmethod
+    def is_renew_certificate():
+        return SysApp.has_arg(RENEW_CERTIFICATE_FLAG)
+
+    @staticmethod
+    def is_app_setup():
+        return SysApp.has_arg(INSTALL_ROOT_CERT)
+
+    @staticmethod
+    def is_app_teardown():
+        return SysApp.has_arg(TEARDOWN_APP)
+
+    def get_renew_certificate_cmd_line(self):
+        return SBIN_SCRIPT + " " + RENEW_CERTIFICATE_FLAG
+
+    @staticmethod
+    def is_debug_enabled():
+        args = str(SysApp.argv())
+        return MOUNT_VERBOSE_FLAG in args
+
+    @staticmethod
+    def get_app_run_type():
+        run_type = AppRunType.MOUNT
+        if ArgsHandler.is_app_setup():
+            run_type = AppRunType.SETUP
+        elif ArgsHandler.is_app_teardown():
+            run_type = AppRunType.TEARDOWN
+        elif ArgsHandler.is_renew_certificate():
+            run_type = AppRunType.RENEW
+        return AppRunType(run_type)
+
+    @staticmethod
+    def set_logging_level():
+        rt = ArgsHandler.get_app_run_type()
+        if ArgsHandler.is_debug_enabled() or rt.is_setup() or rt.is_teardown():
+            MountHelperLogger().SetDebugEnabled()
+        MountHelperLogger().SetLogToFileEnabled()
+        MountHelperLogger.log_prefix = rt.value
+
+    # Method to return all -o option list of mount command.
+    def get_mount_options(self, opts_in):
+        is_secure = False
+        options = opts_in.split(',')
+        o_options = []
+        for option in options:
+            if not SECURE_OPTION in option.lower():
+                o_options.append(option)
+            elif SECURE_ARG in option.lower().split('='):
+                is_secure = True
+
+        return ','.join(o_options), is_secure
+
+    # Method to contruct mount command to run finally.
+    def get_mount_cmd_line(self):
+        assert len(self.mount_source) > 0
+        cmd = [MOUNT, MOUNT_T_OPTION, NFS_VERSION, MOUNT_O_OPTION, ','.join(
+            [ESSENTIAL_OPTIONS, self.options]), self.mount_source,  self.mount_point]
+
+        # pass on the verbose flag
+        if self.is_debug_enabled():
+            cmd.append(MOUNT_VERBOSE_FLAG)
+
+        return cmd
+
+
+
+
+class LockHandler(MountHelperBase):
+
+    @staticmethod
+    def mount_share_lock():
+        return LockHandler('/var/lock/ibm_mount_helper.lck')
+
+    @staticmethod
+    def renew_cert_lock():
+        return LockHandler('/var/lock/ibm_mount_helper_renew.lck')
+
+    def __init__(self, lock_file):
+        self.lock_file = lock_file
+        self.lock_fd = -1
+
+    def grab_non_blocking_lock(self):
+        return self._grab_lock(False)
+
+    def grab_blocking_lock(self):
+        return self._grab_lock(True)
+
+    def _lock(self, blocking):
+        open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
+        self.lock_fd = os.open(self.lock_file, open_mode)
+        # Exclusive lock
+        if blocking:
+            fcntl.flock(self.lock_fd, fcntl.LOCK_EX)
+        else:
+            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        flags = fcntl.fcntl(self.lock_fd, fcntl.F_GETFD)
+        fcntl.fcntl(self.lock_fd, fcntl.F_SETFD, flags)
+
+    def _grab_lock(self, blocking):
+        try:
+            self._lock(blocking)
+            self.LogDebug("Locked ok:" + self.lock_file)
+            return True
+        except IOError as e:
+            self.LogError('The other mount command is in processing:' + str(e))
+        except Exception as ex:
+            self.LogException("GrabLock", ex)
+        self.LogError("Failed to get lock")
+        return False
+
+    # check if file is already locked
+    def is_locked(self):
+        try:
+            self._lock(False)
+            self.release_lock()
+            return False
+        except Exception as ex:
+            return True
+
+    def release_lock(self):
+        if self.lock_fd >= 0:
+            fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+            os.close(self.lock_fd)
+            self.LogDebug("File unlocked:" + self.lock_file)
+            self.lock_fd = -1
+
+
+
+
+class TimerHandler(SystemCtl):
+    TIMER_FILE = '/etc/systemd/system/mount_helper.timer'
+    SERVICE_FILE = '/etc/systemd/system/mount_helper.service'
+
+    TIMER_CONFIG = """[Unit]
+Description=Mount helper timer
+[Timer]
+Unit=mount_helper.service
+OnCalendar=%s
+[Install]
+WantedBy=timers.target
+"""
+
+    SERVICE_CONFIG = """[Unit]
+Description=Mount helper service
+Wants=mount_helper.timer
+[Service]
+ExecStart=%s
+Type=oneshot
+[Install]
+WantedBy=multi-user.target
+"""
+
+    def __init__(self):
+        super().__init__('mount_helper.timer')
+
+    def schedule_certs_renewal(self, date, command_path, min_future_secs=10):
+        # schedule date must be in the future
+        min_date = get_utc_now(seconds=min_future_secs)
+        if date < min_date:
+            self.LogInfo("Forcing schedule time to future: " + str(min_date))
+            date = min_date
+
+        show_tz = self.systemd_supports_utc()
+        onCalendar = utc_format(date, show_tz)
+
+        self.LogDebug("Setting Timer: " + onCalendar)
+        data = TimerHandler.TIMER_CONFIG % onCalendar
+        self.WriteFile(TimerHandler.TIMER_FILE, data, chmod=0o744)
+
+        data = TimerHandler.SERVICE_CONFIG % (command_path)
+        self.WriteFile(TimerHandler.SERVICE_FILE, data, chmod=0o744)
+        return self.restart()
+
+    def teardown(self):
+        if self.FileExists(TimerHandler.TIMER_FILE):
+            self.disable()
+        self.RemoveFile(TimerHandler.TIMER_FILE)
+        self.RemoveFile(TimerHandler.SERVICE_FILE)
+
+
+
+USE_METADATA_SERVICE = True
+META_IP = "169.254.169.254"
+META_PORT_HTTP = 80
+META_PORT_HTTPS = 443
+META_URL_TOKEN = "instance_identity/v1/token" 
+META_URL_CERT = "instance_identity/v1/certificates"
+META_URL_INSTANCE = "metadata/v1/instance"
+META_VERSION = "2022-03-01"
+META_FLAVOUR = "ibm"
+META_TIMEOUT = 20
+META_CERTIFICATE_DURATION_MIN = 300
+META_CERTIFICATE_DURATION_MAX = 3600
+
+
+class JsonRequest(MountHelperBase):
+    def __init__(self):
+        self.init_request(None)
+
+    def init_request(self, url, timeout=0):
+        self.headers = {}
+        self.params = {}
+        self.url = url
+        self.context = None
+        self.data = None
+        self.response = {}
+        self.timeout = timeout
+
+    def set_data(self, data):
+        self.data = data
+
+    def add_header(self, name, value):
+        self.headers[name] = value
+
+    def add_param(self, name, value):
+        self.params[name] = value
+
+    # user friendly error message
+    def log_user_error(self, usr_msg, err_msg):
+        self.LogUser("MetadataService: " + usr_msg)
+        self.LogDebug("MetadataServiceException: " + err_msg)
+
+    def create_ssl_context(self):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        self.context = ctx
+
+    # wrap urlopen to make it easier to test
+
+    def do_urlopen(self, req):
+        return urlopen(req, timeout=self.timeout, context=self.context)
+
+    def set_resp_json(self, resp):
+        try:
+            data = resp.read()
+            self.response = json.loads(decode(data))
+            return self.response is not None
+        except Exception as ex:
+            msg = "Problem Decoding JSON reponse(%s)" % (str(ex))
+            self.log_user_error("problem reading response data", msg)
+        return False
+
+    def do_request(self, method):
+        assert not is_empty(self.url)
+
+        try:
+            url = self.url
+            if len(self.params) > 0:
+                url += "?" + urlencode(self.params)
+
+            data = self.data.encode('utf-8') if self.data else None
+
+            self.LogDebug("Url: " + url)
+            req = Request(url=url, data=data,
+                          headers=self.headers, method=method)
+            resp = self.do_urlopen(req)
+            return self.set_resp_json(resp)
+        except socket.timeout:
+            self.log_user_error("Request Timeout Error", "Socket Timeout")
+        except HTTPError as errh:
+            msg = "Problem accessing (%s) - Status:%d Reason:%s Headers(%s)" % \
+                (url, errh.code, errh.reason, errh.headers)
+            self.log_user_error("Http Error", msg)
+        except URLError as erru:
+            msg = "Problem accessing (%s) - Reason:%s" % (url, erru.reason)
+            self.log_user_error("Url Error", msg)
+        except:
+            self.log_user_error("UnknownException", "n/a")
+        return False
+
+    def get_out(self, name):
+        ndx = -1
+        parts = name.split(":")
+        if len(parts) == 2:
+            name = parts[0]
+            ndx = int(parts[1])
+
+        if name not in self.response:
+            self.LogError("Field missing from response: " + name)
+            return None
+
+        if ndx >= 0:
+            if len(self.response[name]) < (ndx+1):
+                self.LogError("Index out of range: " + name)
+                return None
+
+            return trim(self.response[name][ndx])
+        return trim(self.response[name])
+
+    def post(self):
+        return self.do_request("POST")
+
+    def put(self):
+        return self.do_request("PUT")
+
+    def get(self):
+        return self.do_request("GET")
+
+
+class Metadata(CertificateHandler):
+    def __init__(self):
+        super().__init__()
+
+        self.token = None
+        self.instance_id = None
+        self.private_key = None
+        self.csr = None
+        self.cert = None
+        self.cert_int_ca = None
+        self.created_at = None
+        self.expires_at = None
+        self.port = None
+
+    def is_metadata_service_available(self):
+        if self.is_port_available(META_IP, META_PORT_HTTP):
+            return True
+        return self.is_port_available(META_IP, META_PORT_HTTPS)
+
+    def is_port_available(self, ip, port):
+        ret = False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)  # Timeout in case of port not open
+                s.connect((ip, port))
+                s.close()
+                self.port = port
+                ret = True
+        except:
+            pass
+        self.LogDebug("Connect %s:%s %s" %
+                      (ip, port, "success" if ret else "failed"))
+        return ret
+
+
+    def new_request(self, url, token=None):
+        use_ssl = self.port == META_PORT_HTTPS
+        pfx = "https" if use_ssl else "http"
+        url = "%s://%s/%s" % (pfx, META_IP,url)
+        req = JsonRequest()
+        req.init_request(url, META_TIMEOUT)
+        if use_ssl:
+            req.create_ssl_context()
+        req.add_header('Accept', 'application/json')
+        req.add_param("version", META_VERSION)
+        if token:
+            req.add_header("Authorization", "Bearer " + token)
+        return req
+
+    def get_token(self):
+        req = self.new_request(META_URL_TOKEN)
+        req.add_header("Metadata-Flavor", META_FLAVOUR)
+        if not req.put():
+            return False
+        self.token = req.get_out("access_token")
+        return not is_empty(self.token)
+
+    def generate_certs(self):
+        if not self.token or not self.csr:
+            self.LogError("Token and csr must be set")
+            return False
+
+        cfgShare = ShareConfig(None)
+        expires_in = cfgShare.get_certificate_duration()
+        if (not expires_in or int(expires_in) < META_CERTIFICATE_DURATION_MIN
+               or int(expires_in) > META_CERTIFICATE_DURATION_MAX):
+            expires_in = str(META_CERTIFICATE_DURATION_MAX)
+
+        req = self.new_request(META_URL_CERT, self.token)
+        req.set_data('{"csr": "' + self.csr + '", "expires_in": ' + expires_in + '}')
+        if not req.post():
+            return False
+
+        def get_cert(cert):
+            if cert and self.load_cert(cert):
+                return cert
+            return None
+
+        self.cert = get_cert(req.get_out("certificates:0"))
+        self.cert_int_ca = get_cert(req.get_out("certificates:1"))
+        if not self.cert or not self.cert_int_ca:
+            return False
+
+        self.created_at = req.get_out("created_at")
+        self.expires_at = req.get_out("expires_at")
+
+        return True
+
+    def set_private_key(self, data):
+        if self.load_private_key(data):
+            self.private_key = data
+            return True
+        else:
+            self.LogError("Could not load private key.")
+        return False
+
+    def new_private_key(self):
+        private_key = self.generate_private_key()
+        return self.set_private_key(private_key)
+
+    def new_certificate_signing_request(self):
+        self.csr = self.generate_csr(self.private_key)
+        return not is_empty(self.csr)
+
+
+
+
+
+class RenewCerts(Metadata):
+    RENEW_RETRY_DELAY = 60  # 1 minute
+    RENEW_MAX_RETRIES = -1  # forever
+
+    def __init__(self):
+        super().__init__()
+
+    def install_root_cert(self, src):
+        if not USE_METADATA_SERVICE:
+            return self.get_local_certs_no_metadata(src, init=True)
+
+        return self.install_root_cert_using_config(".", src)
+
+    def get_initial_certs(self):
+        return self.run_func(self._get_initial_certs)
+
+    def renew_cert_now(self):
+        return self.run_func(self._renew_cert_now)
+
+    def renew_cert_cmd_line(self):
+        return self.run_func(self._renew_cert_cmd_line)
+
+    # wrapper func to add lock
+    def run_func(self, afunc):
+        ret = False
+        lockhandler = LockHandler.renew_cert_lock()
+        try:
+            if lockhandler.grab_non_blocking_lock():
+                ret = afunc()
+        except Exception as ex:
+            self.LogException("CertMgr", ex)
+        lockhandler.release_lock()
+        return ret
+
+    def _get_initial_certs(self):
+        cnt = 0
+        self.RENEW_MAX_RETRIES = 25
+        while cnt < self.RENEW_MAX_RETRIES:
+            cnt += 1
+            if self.metadata_renew_cert():
+                return self.load_certificate()
+            self.wait(self.RENEW_RETRY_DELAY,
+                 "Generate cert failed, retry(" + str(cnt) + " of " + str(self.RENEW_MAX_RETRIES) + ")")
+        return False
+
+    def _renew_cert_cmd_line(self):
+        cnt = 0
+        self.LogInfo("Metadata renew certs.")
+        while cnt < self.RENEW_MAX_RETRIES or self.RENEW_MAX_RETRIES < 0:
+            cnt += 1
+            # check if mount in progress
+            lockhandler = LockHandler.mount_share_lock()
+            if not lockhandler.is_locked():
+                hasActiveMounts = self.get_ipsec_mgr().cleanup_unused_configs(None)
+                if not hasActiveMounts:
+                    self.LogInfo(
+                        "Will not renew cert - no nfs mounts active or pending")
+                    return True  # this is ok
+            if self.metadata_renew_cert():
+                return True
+            if not USE_METADATA_SERVICE:
+                return False
+            self.wait(self.RENEW_RETRY_DELAY,
+                      "Renew cert failed, retry(" + str(cnt) + ")")
+        return False
+
+    def _renew_cert_now(self):
+        return self._get_initial_certs()
+
+    def metadata_get_new_certs(self):
+        if not self.is_metadata_service_available():
+            return self.LogError("Could not connect to Metadata service.",
+                                 code=SysApp.ERR_METADATA_UNAVAILABLE)
+
+        if not self.get_token():
+            return self.LogError("Problem getting token",
+                                 code=SysApp.ERR_METADATA_TOKEN)
+
+        ipsec = self.get_ipsec_mgr()
+        private_key = ipsec.read_private_key()
+        if private_key:
+            self.LogDebug("RenewCert:Use existing private key")
+            private_key = self.set_private_key(private_key)
+
+        if not private_key:
+            self.new_private_key()
+
+        if not self.new_certificate_signing_request():
+            return self.LogError("Problem with generating signing request.")
+
+        if not self.generate_certs():
+            return self.LogError("Generate certs failed.",
+                                 code=SysApp.ERR_METADATA_CERT_RENEW)
+        return True
+
+    def metadata_renew_cert(self):
+        if not USE_METADATA_SERVICE:
+            self.LogDebug("Checking for local certs in: " +
+                          LocalInstall.cert_path())
+            return self.get_local_certs_no_metadata(LocalInstall.cert_path(), init=False)
+
+        if not self.metadata_get_new_certs():
+            return False
+
+        ipsec = self.get_ipsec_mgr()
+        ipsec.write_new_certs(self.cert, self.private_key, self.cert_int_ca)
+        return self.schedule_next_renewal()
+
+    def schedule_next_renewal(self):
+        if not self.load_certificate():
+            return False
+
+        renew_time_stamp = self.get_certificate_renew_timestamp()
+        if not renew_time_stamp:
+            self.LogError(
+                'Certificate file not found or unable to load cert file.')
+            return False
+
+        ao = ArgsHandler()
+        to = TimerHandler()
+        ret = to.schedule_certs_renewal(
+            renew_time_stamp, ao.get_renew_certificate_cmd_line())
+        return ret
+
+    def install_root_cert_using_config(self, install_path, cert_path):
+        cfgOrig = ShareConfig(None, cert_path=cert_path)
+        cfgInstall = ShareConfig(install_path, cert_path=cert_path)
+
+        cfg = cfgInstall
+        # if region set in install file - use that
+        if not cfgInstall.get_region() and cfgOrig.exists():
+            cfg = cfgOrig
+
+        if not cfg.exists():
+            return cfg.error("Missing configuration file:")
+
+        regions = cfg.load_regions()
+        if not regions:
+            return False
+
+        install_cas = cfg.get_files_for_regions(regions)
+        if not install_cas:
+            return False
+
+        ipsec = self.get_ipsec_mgr()
+        ipsec.remove_all_certs(root=True)
+        for ca in install_cas:
+            if not ipsec.install_root_cert(
+                    get_filename(ca.fname),
+                    self.ReadFile(ca.fname)):
+                return False
+
+        if cfg.name == cfgInstall.name:
+            self.CopyFile(cfgInstall.name, cfgOrig.name, mkdir=True)
+
+        return ipsec.reload_certs(root=True)
+
+    def get_local_certs_no_metadata(self, cert_path, init):
+        ipsec = self.get_ipsec_mgr()
+
+        ipsec2 = clone_obj(ipsec)
+        if not ipsec2.flatten_paths(cert_path):
+            return False
+
+        # load root CA certs
+        cas = ipsec2.root_cert_filenames()
+        if len(cas) > 0:
+            self.LogInfo("Installing RootCA(s)")
+            for ca in cas:
+                if not ipsec.install_root_cert(
+                        get_filename(ca),
+                        self.ReadFile(ca)):
+                    return False
+            if not ipsec.reload_certs(root=True):
+                return False
+        elif init:
+            return self.LogError("No root CA cert(s) found.")
+
+        # load certs if available
+        if not USE_METADATA_SERVICE:
+            key = ipsec2.read_private_key()
+            cert = ipsec2.read_cert()
+            int_ca = ipsec2.read_int_ca()
+            cnt = [key, cert, int_ca].count(None)
+            if cnt == 0:
+                if ipsec.write_new_certs(cert, key, int_ca):
+                    return self.schedule_next_renewal()
+            else:
+                if cnt == 3 and init:  # ok no cert can get later
+                    self.LogInfo("No certs found to install.")
+                    return True
+
+                self.LogError("Incomplete list of cert files in:" + cert_path)
+                return False
+        return True
+
+
+
+
+class MountIbmshare(MountHelperBase):
+    def __init__(self):
+        self.mounts = []
+        self.lockhandler = LockHandler.mount_share_lock()
+
+    def set_installed_ipsec(self):
+        ss_obj = StrongSwanConfig()
+        if ss_obj.set_version():
+            LocalInstall.set_ipsec_mgr(ss_obj)
+            return True
+        self.LogError("IPsec installation failed, check the charon logs.")
+        return False
+
+    def get_ipsec_mgr(self):
+        return LocalInstall.get_ipsec_mgr()
+
+    def app_setup(self):
+        if LocalInstall.setup():
+            ipsec = self.get_ipsec_mgr()
+            if ipsec:
+                ipsec.remove_all_configs(unused=True)
+                if ipsec.setup():
+                    cert_path = SysApp.argv(2)
+                    return RenewCerts().install_root_cert(cert_path)
+        self.LogError("Installation failed.", code=SysApp.ERR_APP_INSTALL)
+        return False
+
+    def app_teardown(self):
+        self.LogDebug("TearDown starting")
+        ipsec = self.get_ipsec_mgr()
+        if ipsec:
+            ipsec.remove_all_certs()
+            ipsec.remove_all_configs()
+        LocalInstall.teardown()
+        TimerHandler().teardown()
+        self.LogDebug("TearDown complete")
+        return True
+
+    def renew_certs(self):
+        return RenewCerts().renew_cert_cmd_line()
+
+    def lock(self):
+        return self.lockhandler.grab_blocking_lock()
+
+    def unlock(self):
+        return self.lockhandler.release_lock()
+
+   # Method to check whether nfs share is already mounted.
+    def is_share_mounted(self, ip_address, mount_path):
+        self.mounts = NfsMount().load_nfs_mounts()
+        if self.mounts is None:
+            return True  # Force app to exit app
+        for mount in self.mounts:
+            if mount.ip == ip_address and mount.mount_path == mount_path:
+                self.LogUser('Share is already mounted at: ' +
+                             mount.mounted_at)
+                return True
+        return False
+
+    def mount(self, args):
+        if self.is_share_mounted(args.ip_address, args.mount_path):
+            return False
+
+        if not args.is_secure:
+            self.LogUser("Non-IPsec mount requested.")
+            ipsec = self.get_ipsec_mgr()
+            if ipsec:
+                ipsec.remove_config(args.ip_address)
+                ipsec.reload_config()
+        else:
+            cert = RenewCerts()
+            if not cert.root_cert_installed():
+                self.LogError("Root Certificate must be installed.")
+                return False
+
+            if not cert.load_certificate():
+                if not cert.get_initial_certs():
+                    return False
+
+            if cert.is_certificate_eligible_for_renewal():
+                if not cert.renew_cert_now():
+                    if cert.is_certificate_expired():
+                        return False
+                    self.LogWarn("Cert has not expired, so will continue.")
+
+            ipsec = cert.get_ipsec_mgr()
+            if not ipsec.is_running():
+                return False
+            if not ipsec.create_config(args.ip_address):
+                return False
+            ipsec.cleanup_unused_configs(self.mounts)
+            ipsec.is_reload = True
+            if not ipsec.reload_config():
+                return False
+            # ipsec.connect(args.ip_address)
+
+        self.unlock()
+        out = self.RunCmd(args.get_mount_cmd_line(), "MountCmd", ret_out=True)
+        if not out or out.is_error():
+            # we pass back the mount command exit code
+            exit_code = SysApp.ERR_MOUNT + out.returncode if out else SysApp.ERR_MOUNT
+            return self.LogError("Share mount failed.", code=exit_code)
+
+        self.ca_certs_alert()
+        self.LogUser("Share successfully mounted:" + out.stdout)
+        return True
+
+    # Check int and root CA certs validity.
+    def ca_certs_alert(self):
+        cert = RenewCerts()
+        if not cert.load_int_ca_certificate():
+            return False
+        cert.check_ca_certs_validity("Int")
+        if not cert.load_root_ca_certificate():
+            return False
+        cert.check_ca_certs_validity("Root")
+        return True
+
+    def run(self):
+        if not SysApp.is_root():
+            return self.LogError("Run the mount as super user.", code=SysApp.ERR_NOT_SUPER_USER)
+
+        ret = False
+        try:
+            ArgsHandler.set_logging_level()
+            self.set_installed_ipsec()
+
+            rt = ArgsHandler.get_app_run_type()
+            if rt.is_setup():
+                ret = self.app_setup()
+            elif rt.is_teardown():
+                ret = self.app_teardown()
+            elif rt.is_renew():
+                ret = self.renew_certs()
+                self.ca_certs_alert()
+            elif rt.is_mount():
+                args = ArgsHandler.get_mount_args()
+                if args:
+                    self.lock()
+                    ret = self.mount(args)
+                    self.unlock()
+        except Exception as ex:
+            self.LogException("AppRun", ex)
+            self.unlock()
+        return ret
+
+
+def main():
+    ret = MountIbmshare().run()
+    SysApp.exit(ret)
+
+
+if __name__ == '__main__':
+    main()
