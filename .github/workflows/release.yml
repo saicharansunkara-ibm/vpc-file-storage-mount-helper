@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - folder-restructure
 
 jobs:
   release:
