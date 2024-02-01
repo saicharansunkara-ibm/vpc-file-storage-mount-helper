@@ -16,7 +16,7 @@ MOUNT_SCRIPT := /sbin/$(NAME)
 CONTROL := $(BUILD_DIR)/DEBIAN/control
 POST_INSTALL := $(BUILD_DIR)/DEBIAN/postinst
 REDHAT_SPEC := $(BUILD_DIR)/red-hat.spec
-PYTHON_MERGE_SCRIPT := "$(PWD)/mount-helper/scripts/create_mount_ibmshare.py"
+PYTHON_MERGE_SCRIPT := "$(CURDIR)/scripts/create_mount_ibmshare.py"
 INSTALL_TAR_FILE := "$(NAME)-latest.tar.gz"
 CHECKSUM_FILE := "$(INSTALL_TAR_FILE).sha256"
 
@@ -76,7 +76,7 @@ rpm-build:
 	echo "%files" >> $(REDHAT_SPEC)
 	echo "%attr(755, root, root)   $(MOUNT_SCRIPT)" >> $(REDHAT_SPEC)
 
-	rpmbuild -ba  --build-in-place --define "_topdir $(PWD)/$(BUILD_DIR)/rpm" $(REDHAT_SPEC)
+	rpmbuild -ba  --build-in-place --define "_topdir $(CURDIR)/$(BUILD_DIR)/rpm" $(REDHAT_SPEC)
 	cp  $(BUILD_DIR)/rpm/RPMS/* ./install
 
 	rm -rf $(BUILD_DIR)
