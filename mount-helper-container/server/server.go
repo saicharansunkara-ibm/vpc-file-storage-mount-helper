@@ -107,6 +107,9 @@ func main() {
 	// Add REST APIs to router
 	router.POST("/api/mount", handleMounting(sysOp))
 	router.POST("/api/umount", handleUnMount(sysOp))
+	router.GET("/api/mountHelperContainerStatus", mountHelperContainerStatus)
+	router.POST("/api/debugLogs", debugLogs(sysOp))
+	router.GET("/api/mountStatus", mountStatus(sysOp))
 
 	// Serve HTTP requests over Unix socket
 	err = http.Serve(listener, router)
@@ -115,6 +118,9 @@ func main() {
 	}
 }
 
+func mountHelperContainerStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"Message": "Mount-helper-container server is live!"})
+}
 
 // handleMounting mounts ibmshare based file system stagingTargetPath to targetPath
 func handleMounting(sysOp SystemOperation) gin.HandlerFunc {
@@ -186,3 +192,77 @@ func handleUnMount(sysOp SystemOperation) gin.HandlerFunc {
 	}
 }
 
+// debugLogs collectes logs necessary in case there are any mount failures.
+func debugLogs(sysOp SystemOperation) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var request struct {
+			RequestID string `json:"requestID"`
+		}
+
+		if err := c.BindJSON(&request); err != nil {
+			logger.Error("Invalid request: ", zap.Error(err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		output, err := sysOp.Execute("journalctl", "-u", "mount-helper-container")
+
+		if err != nil {
+			logger.Error("Unable to fetch logs, error: ", zap.Error(err))
+			logger.Error("Command output: ", zap.String("output", output))
+			response := gin.H{
+				"Error:": err.Error(),
+			}
+			c.JSON(http.StatusInternalServerError, response)
+			return
+		}
+
+		logFile, err := os.Create("/tmp/mount-helper-container.log")
+		if err != nil {
+			logger.Error("Not able to create log file: ", zap.Error(err))
+			return
+		}
+		defer logFile.Close()
+
+		// Write the output to the file
+		_, err = logFile.WriteString(string(output))
+		if err != nil {
+			logger.Error("Error writing to file:", zap.Error(err))
+			return
+		}
+
+		// mount-helper logs are stored at /opt/ibm/mount-ibmshare/mount-ibmshare.log. Available at volume mount path
+
+		c.JSON(http.StatusOK, gin.H{"Message": "Request processed successfully"})
+	}
+}
+
+// mountStatus takes target directory as input and checks if it is a valid mount directory
+func mountStatus(sysOp SystemOperation) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var request struct {
+			TargetPath string `json:"targetPath"`
+		}
+
+		if err := c.BindJSON(&request); err != nil {
+			logger.Error("Invalid request: ", zap.Error(err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		logger.Info("New find mount request with values: ", zap.String("Target Path:", request.TargetPath))
+
+		_, err := sysOp.Execute("findmnt", request.TargetPath)
+
+		if err != nil {
+			logger.Error("'findmnt' failed with error: ", zap.Error(err))
+			response := gin.H{
+				"Error:": err.Error(),
+			}
+			c.JSON(http.StatusInternalServerError, response)
+			return
+		}
+
+		c.JSON(http.StatusOK, "Success!!")
+	}
+}
