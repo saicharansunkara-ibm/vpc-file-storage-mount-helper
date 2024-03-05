@@ -22,7 +22,12 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Install Strongswan For Testing IPSec Service In Unit Tests
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo apt install charon-systemd
+
+    - name: Install Dependencies for mount-helper-container
+      if: ${{ matrix.package_dir == 'mount-helper-container' }}
+      run: make deps -C ${{ matrix.package_dir }}
 
     - name: Run Unit Tests
       run: sudo make test -C ${{ matrix.package_dir }}
