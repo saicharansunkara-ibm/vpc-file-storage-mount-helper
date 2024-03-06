@@ -25,13 +25,14 @@ jobs:
       if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo apt install charon-systemd
 
-    - name: Install Dependencies for mount-helper-container
-      if: ${{ matrix.package_dir == 'mount-helper-container' }}
-      run: make deps -C ${{ matrix.package_dir }}
-
-    - name: Run Unit Tests
+    - name: Run Unit Tests for mount helper
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo make test -C ${{ matrix.package_dir }}
-
+      
+    - name: Run Unit Tests for mount helper container
+      if: ${{ matrix.package_dir == 'mount-helper-container' }}
+      run: sudo make ut-coverage -C ${{ matrix.package_dir }}
+      
     - name: Build Debian/rpm Packages For Development Environment
       run: make dev -C ${{ matrix.package_dir }}
 
