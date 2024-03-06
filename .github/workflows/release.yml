@@ -35,7 +35,7 @@ jobs:
       
     - name: Run Unit Tests for mount helper container
       if: ${{ matrix.package_dir == 'mount-helper-container' }}
-      run: sudo make ut-coverage -C ${{ matrix.package_dir }}
+      run: export GOPATH=$HOME/go && echo $GOPATH && sudo make ut-coverage -C ${{ matrix.package_dir }}
       
     - name: Build Debian/rpm Packages For Development Environment
       run: make dev -C ${{ matrix.package_dir }}
