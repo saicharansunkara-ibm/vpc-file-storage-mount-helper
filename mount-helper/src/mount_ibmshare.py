@@ -73,41 +73,38 @@ class MountIbmshare(MountHelperBase):
         return False
 
     def mount(self, args):
-        if self.is_share_mounted(args.ip_address, args.mount_path):
-            return False
-
-        if not args.is_secure:
-            self.LogUser("Non-IPsec mount requested.")
-            ipsec = self.get_ipsec_mgr()
-            if ipsec:
-                ipsec.remove_config(args.ip_address)
-                ipsec.reload_config()
-        else:
-            cert = RenewCerts()
-            if not cert.root_cert_installed():
-                self.LogError("Root Certificate must be installed.")
-                return False
-
-            if not cert.load_certificate():
-                if not cert.get_initial_certs():
+        if not self.is_share_mounted(args.ip_address, args.mount_path):
+            if not args.is_secure:
+                self.LogUser("Non-IPsec mount requested.")
+                ipsec = self.get_ipsec_mgr()
+                if ipsec:
+                    ipsec.remove_config(args.ip_address)
+                    ipsec.reload_config()
+            else:
+                cert = RenewCerts()
+                if not cert.root_cert_installed():
+                    self.LogError("Root Certificate must be installed.")
                     return False
 
-            if cert.is_certificate_eligible_for_renewal():
-                if not cert.renew_cert_now():
-                    if cert.is_certificate_expired():
+                if not cert.load_certificate():
+                    if not cert.get_initial_certs():
                         return False
-                    self.LogWarn("Cert has not expired, so will continue.")
 
-            ipsec = cert.get_ipsec_mgr()
-            if not ipsec.is_running():
-                return False
-            if not ipsec.create_config(args.ip_address):
-                return False
-            ipsec.cleanup_unused_configs(self.mounts)
-            ipsec.is_reload = True
-            if not ipsec.reload_config():
-                return False
-            # ipsec.connect(args.ip_address)
+                if cert.is_certificate_eligible_for_renewal():
+                    if not cert.renew_cert_now():
+                        if cert.is_certificate_expired():
+                            return False
+                        self.LogWarn("Cert has not expired, so will continue.")
+
+                ipsec = cert.get_ipsec_mgr()
+                if not ipsec.is_running():
+                    return False
+                if not ipsec.create_config(args.ip_address):
+                    return False
+                ipsec.cleanup_unused_configs(self.mounts)
+                ipsec.is_reload = True
+                if not ipsec.reload_config():
+                    return False
 
         self.unlock()
         out = self.RunCmd(args.get_mount_cmd_line(), "MountCmd", ret_out=True)

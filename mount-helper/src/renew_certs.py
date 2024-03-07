@@ -51,7 +51,11 @@ class RenewCerts(metadata.Metadata):
 
     def _get_initial_certs(self):
         cnt = 0
-        self.RENEW_MAX_RETRIES = 25
+        cfgShare = ShareConfig(None)
+        retry_cnt = cfgShare.get_metadata_retry_count()
+        retry_interval = cfgShare.get_metadata_retry_interval()
+        self.RENEW_MAX_RETRIES = int(retry_cnt)
+        self.RENEW_RETRY_DELAY = int(retry_interval)
         while cnt < self.RENEW_MAX_RETRIES:
             cnt += 1
             if self.metadata_renew_cert():
