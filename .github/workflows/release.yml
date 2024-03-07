@@ -16,8 +16,8 @@ jobs:
         package_dir:
           - mount-helper
           - mount-helper-container
-    env:
-      GOPATH: '/home/runner/go'
+    # env:
+    #   GOPATH: '/home/runner/go'
 
     steps:
     - name: Checkout Code
