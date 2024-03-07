@@ -16,6 +16,8 @@ jobs:
         package_dir:
           - mount-helper
           - mount-helper-container
+    env:
+      GOPATH: '/home/runner/go'
 
     steps:
     - name: Checkout Code
@@ -28,10 +30,6 @@ jobs:
     - name: Run Unit Tests for mount helper
       if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo make test -C ${{ matrix.package_dir }}
-
-    - name: Set GOPATH env variable for mount helper container
-      if: ${{ matrix.package_dir == 'mount-helper-container' }}
-      run: sudo mkdir $HOME/go && export GOPATH=$HOME/go
       
     - name: Run Unit Tests for mount helper container
       if: ${{ matrix.package_dir == 'mount-helper-container' }}
