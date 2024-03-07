@@ -31,7 +31,7 @@ jobs:
         GOPATH: '/home/runner/go'
 
     - name: Add Go binaries to PATH
-      run: echo "::add-path::${GOPATH}/bin"
+      run: echo "PATH=${GOPATH}/bin:$PATH" >> $GITHUB_ENV
 
     - name: Install Strongswan For Testing IPSec Service In Unit Tests
       if: ${{ matrix.package_dir == 'mount-helper' }}
