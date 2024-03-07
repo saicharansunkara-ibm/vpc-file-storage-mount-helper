@@ -27,8 +27,8 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.19
-        env:
-          GOPATH: '/home/runner/go'
+      env:
+        GOPATH: '/home/runner/go'
 
     - name: Install Strongswan For Testing IPSec Service In Unit Tests
       if: ${{ matrix.package_dir == 'mount-helper' }}
