@@ -30,6 +30,9 @@ jobs:
       env:
         GOPATH: '/home/runner/go'
 
+    - name: Add Go binaries to PATH
+      run: echo "::add-path::${GOPATH}/bin"
+
     - name: Install Strongswan For Testing IPSec Service In Unit Tests
       if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo apt install charon-systemd
