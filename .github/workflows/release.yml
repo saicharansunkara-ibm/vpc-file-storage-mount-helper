@@ -36,7 +36,12 @@ jobs:
       run: sudo make ut-coverage -C ${{ matrix.package_dir }}
       
     - name: Build Debian/rpm Packages For Development Environment
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: make dev -C ${{ matrix.package_dir }}
+
+    - name: Build Debian/rpm Packages For mount-helper-container
+      if: ${{ matrix.package_dir == 'mount-helper-container' }}
+      run: sudo make packages -C ${{ matrix.package_dir }}
 
     - name: Development Environment Latest Version
       id: dev-release
@@ -48,6 +53,7 @@ jobs:
         body: Mount Helper For Development Teams-GA
 
     - name: Build Debian/rpm Packages For Production Environment
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: make prod -C ${{ matrix.package_dir }}
 
     - name: Latest Tag Release
