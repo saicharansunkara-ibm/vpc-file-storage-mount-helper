@@ -124,20 +124,11 @@ startservice: build-linux
 	systemctl enable mount-helper-container
 	systemctl start mount-helper-container
 
-deps:
-	echo "Installing dependencies ..."
-	go mod download
-	go get github.com/pierrre/gotestcover
-	go install github.com/pierrre/gotestcover
-	@if ! which golangci-lint >/dev/null || [[ "$$(golangci-lint --version)" != *${LINT_VERSION}* ]]; then \
-		curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v${LINT_VERSION}; \
-	fi
-
 test:
-	$(GOPATH)/bin/gotestcover -v -race -short -coverprofile=cover.out ${GOPACKAGES}
+	go test -v -timeout 1800s -coverprofile=cover.out ./...
 	go tool cover -html=cover.out -o=cover.html
 
-ut-coverage: deps test
+ut-coverage: test
 	@./scripts/coverage.sh
 	rm cover.html cover.out
 	go mod tidy
