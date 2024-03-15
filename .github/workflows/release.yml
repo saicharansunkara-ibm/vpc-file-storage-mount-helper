@@ -41,7 +41,7 @@ jobs:
 
     - name: Build Debian/rpm Packages For mount-helper-container
       if: ${{ matrix.package_dir == 'mount-helper-container' }}
-      run: sudo make packages -C ${{ matrix.package_dir }}
+      run: cd ${{ matrix.package.dir }} && sudo make packages
 
     - name: Development Environment Latest Version
       id: dev-release
