@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - workflow
 
 jobs:
   release:
@@ -14,52 +15,81 @@ jobs:
       matrix:
         package_dir:
           - mount-helper
+          - mount-helper-container
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v2
 
     - name: Install Strongswan For Testing IPSec Service In Unit Tests
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo apt install charon-systemd
 
-    - name: Run Unit Tests
+    - name: Run Unit Tests for mount helper
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: sudo make test -C ${{ matrix.package_dir }}
-
+      
+    - name: Run Unit Tests for mount helper container
+      if: ${{ matrix.package_dir == 'mount-helper-container' }}
+      run: sudo make ut-coverage -C ${{ matrix.package_dir }}
+      
     - name: Build Debian/rpm Packages For Development Environment
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       run: make dev -C ${{ matrix.package_dir }}
 
+    - name: Build Debian/rpm Packages For mount-helper-container
+      if: ${{ matrix.package_dir == 'mount-helper-container' }}
+      run: |
+          cd ${{ matrix.package_dir }}
+          make packages
+
     - name: Development Environment Latest Version
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       id: dev-release
       uses: softprops/action-gh-release@v1
       with:
-        files: /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz,/home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz.sha256
+        files: /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz,/home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz.sha256
         tag_name: dev-pre-ga
         name: Development Version
         body: Mount Helper For Development Teams-GA
 
     - name: Build Debian/rpm Packages For Production Environment
-      run: make prod -C ${{ matrix.package_dir }}
+      if: ${{ matrix.package_dir == 'mount-helper' }}
+      run: | 
+          make prod -C ${{ matrix.package_dir }}
+          cd mount-helper-container
+          make packages
 
     - name: Latest Tag Release
       id: latest-tag
       uses: softprops/action-gh-release@v1
       with:
-        files: /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz, /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz.sha256
+        files: |
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz.sha256
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper-container/mount-helper-container-latest.tar.gz
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper-container/mount-helper-container-latest.tar.gz.sha256
         tag_name: latest
         name: Latest
         body: The latest release tag provides static link for package download. This has the same artificats as in the versioned latest version.
 
     - name: Latest Version
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       id: release
       uses: softprops/action-gh-release@v1
       with:
-        files: /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz,/home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper/mount.ibmshare-latest.tar.gz.sha256
-        tag_name: 0.0.3
-        name: 0.0.3
+        files: |
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/${{ matrix.package_dir }}/mount.ibmshare-latest.tar.gz.sha256
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper-container/mount-helper-container-latest.tar.gz
+          /home/runner/work/vpc-file-storage-mount-helper/vpc-file-storage-mount-helper/mount-helper-container/mount-helper-container-latest.tar.gz.sha256
+        tag_name: 0.0.4
+        name: 0.0.4
         body: CSR generated with SHA1 is not supported to get certs using Metadata.
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
 
     - name: Perform CodeQL Analysis Mount Helper Code
+      if: ${{ matrix.package_dir == 'mount-helper' }}
       uses: github/codeql-action/analyze@v2

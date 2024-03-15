@@ -28,6 +28,8 @@ RPM_RELEASE_NUM := 1
 
 BUILD_DIR := $(NAME)-$(APP_VERSION)
 BIN_DIR := bin
+INSTALL_TAR_FILE := "$(NAME)-latest.tar.gz"
+CHECKSUM_FILE := "$(INSTALL_TAR_FILE).sha256"
 
 DEBIAN_CONTROL := $(BUILD_DIR)/DEBIAN/control
 REDHAT_SPEC := $(BUILD_DIR)/red-hat.spec
@@ -100,8 +102,16 @@ rpm-build: build-linux
 	cp  $(BUILD_DIR)/rpm/RPMS/* ./
 	rm -rf $(BUILD_DIR)
 
+tar-package:
+tar-package:
+	mkdir packages
+	cp ${NAME}-* packages/
+	cd packages && tar -czvf  ../$(INSTALL_TAR_FILE)  *
+	sha256sum ./$(INSTALL_TAR_FILE) > $(CHECKSUM_FILE)
+	@printf "Production - Install package created ok: $(INSTALL_TAR_FILE)\n"
+
 packages:
-packages: deb-build rpm-build clean
+packages: deb-build rpm-build tar-package clean
 
 build:
 	CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -mod mod -o ${BIN_DIR}/mount-helper-container-server ./server/server.go
@@ -109,35 +119,25 @@ build:
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod mod -o ${BIN_DIR}/mount-helper-container-server -ldflags "-s -w" -a ./server/server.go
 
-addpackage:
-	go mod tidy
-
 clean:
-	rm -rf bin
+	rm -rf ${BIN_DIR}
+	rm *.deb *.rpm
+	rm -rf packages
 
 startservice:
 startservice: build-linux
 	systemctl daemon-reload
 	cp ./mount-helper-container.service /etc/systemd/system/
-	cp ./bin/mount-helper-container-server /usr/local/bin/
+	cp ./${BIN_DIR}/mount-helper-container-server /usr/local/bin/
 	service mount-helper-container start
 	systemctl enable mount-helper-container
 	systemctl start mount-helper-container
 
-deps:
-	echo "Installing dependencies ..."
-	go mod download
-	go get github.com/pierrre/gotestcover
-	go install github.com/pierrre/gotestcover
-	@if ! which golangci-lint >/dev/null || [[ "$$(golangci-lint --version)" != *${LINT_VERSION}* ]]; then \
-		curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v${LINT_VERSION}; \
-	fi
-
 test:
-	$(GOPATH)/bin/gotestcover -v -race -short -coverprofile=cover.out ${GOPACKAGES}
+	go test -v -timeout 1800s -coverprofile=cover.out ./...
 	go tool cover -html=cover.out -o=cover.html
 
-ut-coverage: deps test
+ut-coverage: test
 	@./scripts/coverage.sh
 	rm cover.html cover.out
 	go mod tidy
