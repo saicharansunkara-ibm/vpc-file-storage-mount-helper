@@ -30,7 +30,7 @@ func main() {
 	// socket path
 	socketPath := "/tmp/mysocket.sock"
 	// payload
-	payload := fmt.Sprintf(`{"stagingTargetPath":"fs1235","targetPath":"/test","fsType":"ext4","requestID":"1321"}`)
+	payload := fmt.Sprintf(`{"mountPath":"fs1235","targetPath":"/test","fsType":"ext4","requestID":"1321"}`)
 	// url
 	url := "http://unix/api/mount"
 

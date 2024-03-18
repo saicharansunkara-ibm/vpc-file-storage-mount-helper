@@ -6,21 +6,14 @@ This is a REST based mount-helper-container service which is used for mounting E
 
 | IKS/ROKS Version | Image/Distribution | Mount-Helper-Container Supported | 
 |------|-------|--------|
-| ROKS 4.14 | RHEL 8.9 | |
-| ROKS 4.13 | RHEL 8.8 | |
-| ROKS 4.12 | RHEL 8.8 | |
-| ROKS 4.11 | RHEL 8.8 | |
-| IKS 1.28 | Ubuntu 20.04 | |
-| IKS 1.27 | Ubuntu 20.04 | |
-| IKS 1.26 | Ubuntu 20.04 | |
-| IKS 1.25 | Ubuntu 20.04 | |
-| IKS 1.24 | Ubuntu 20.04 | |
+| ROKS 4.16 | RHEL 8.9 | :heavy_check_mark: |
+| IKS 1.30 | Ubuntu 20.04 | :heavy_check_mark: |
 
-## Package Dependencies
+## Changelog + Package Dependencies:
 
-| Mount Helper Container Version | Dependencies |
-|------|-------|
-| 1.0.0 | mount-helper-1.0.0 |
+| Mount Helper Container Version | Dependencies | Release | Date | Changes |
+|------|-------|--------|--------|--------|
+| 0.0.2 | mount.ibmshare-0.0.3 | v0.0.5 | April 05, 2024 | - Initial production release |
 
 ## Package Building
 
@@ -35,7 +28,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 
 1. Build rpm based packages use `make rpm-build`
 2. Copy the package on the host system it is required.
-3. Run `yum install -y mount-helper-container-x.y.z.rpm`. This will install all required files.
+3. Run `yum install -y mount-helper-container-x.y.z.rpm --nogpgcheck`. This will install all required files.
 
 The packages will be created inside **/mount-helper-container** folder
 

@@ -58,7 +58,7 @@ func TestHandleMounting(t *testing.T) {
 
 	// Positive Test Case
 	t.Run("Valid Request", func(t *testing.T) {
-		jsonBody := `{"stagingTargetPath": "/staging", "targetPath": "/target", "fsType": "ibmshare", "requestID": "123"}`
+		jsonBody := `{"mountPath": "/source", "targetPath": "/target", "fsType": "ibmshare", "requestID": "123"}`
 		req, err := http.NewRequest("POST", "/api/mount", strings.NewReader(jsonBody))
 		assert.NoError(t, err)
 
@@ -91,7 +91,7 @@ func TestHandleMounting(t *testing.T) {
 			return "", errors.New("mounting failed")
 		}
 
-		jsonBody := `{"stagingTargetPath": "/staging", "targetPath": "/target", "fsType": "ibmshare", "requestID": "123"}`
+		jsonBody := `{"mountPath": "/source", "targetPath": "/target", "fsType": "ibmshare", "requestID": "123"}`
 		req, err := http.NewRequest("POST", "/api/mount", strings.NewReader(jsonBody))
 		assert.NoError(t, err)
 
