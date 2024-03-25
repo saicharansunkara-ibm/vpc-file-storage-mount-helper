@@ -19,11 +19,16 @@ git clone git@github.com:IBM/vpc-file-storage-mount-helper.git
 ```
 cd vpc-file-storage-mount-helper
 ```
-3. Run make command to build mount helper .deb/.rpm packages.
+3. Run make command to build mount helper .deb/.rpm packages along with installation/uninstallation scripts.
 ```
-make iks-prod
+make prod
 ```
-4. You can find mount-ibmshare-<version>.rpm and mount-ibmshare-<version>.deb packages in current directory
+4. You can find mount.ibmshare-latest.tar.gz tar file in current directory
+
+5. Untar to have all required files for installation
+```
+tar -xvzf mount.ibmshare-latest.tar.gz -C test/
+```
 
 ## How to contribute code
 Mount helper code is open sourced and anybody can contribute to the code. Follow steps below to contribute mount helper code.
@@ -60,18 +65,14 @@ git push
 10. Finally create pull request.
 
 ## How to install
-1. You can follow the procedure to build packages to build .deb/.rpm packages (OR)
-2. You can download the packages directly from GitHub releases.
+1. You can download the packages directly from GitHub releases.
    The latest packages are available at: https://github.com/IBM/vpc-file-storage-mount-helper/releases
 ```
-curl -LO https://github.com/IBM/vpc-file-storage-mount-helper/releases/download/latest/mount-helper.latest.deb
-(OR)
-curl -LO https://github.com/IBM/vpc-file-storage-mount-helper/releases/download/latest/mount-helper.latest.rpm
+curl -LO https://github.com/IBM/vpc-file-storage-mount-helper/releases/download/latest/mount.ibmshare-latest.tar.gz
 ```
-3. Then run install command
+3. Then install use script,
 ```
-apt install mout-ibmshare-<version>.deb (For Ubuntu)
-yum install mount-ibmshare-<version>.rpm (For RedHat)
+./install.sh
 ```
 4. Few tips to verify installation
     - Check for file /sbin/mount.ibmshare, if the file is not found then installation must have failed. Check the logs and fix/report.
@@ -85,15 +86,14 @@ yum install mount-ibmshare-<version>.rpm (For RedHat)
 ## How to update packages:
 1. Uninstall currently installed package
 ```
-apt remove mount-helper
-yum remove mount-helper
+./uninstall.sh
 ```
 2. Download the latest packages from GitHub and install.
 3. TODO
    - If we are able to host packages on any web server to be able to install directly, then below commands are enough to update the packages. We have to make sure latest packages are uploaded to the repo server.
 ```
-apt update mount-ibmshare
-yum update mount-ibmshare
+apt update mount.ibmshare
+yum update mount.ibmshare
 ```
 
 ## Dependencies of these Packages:
@@ -122,13 +122,13 @@ https://github.com/IBM/vpc-file-storage-mount-helper/releases
 The currently installed packages and it's details can be verified using below comamnds.
 ### Ubuntu
 ```
-apt list | grep mount-ibmshare  ---> This shows the currently installed helper package.
-apt show mount-ibmshare-<version>   ---> This shows package details.
+apt list | grep mount.ibmshare  ---> This shows the currently installed helper package.
+apt show mount.ibmshare-<version>   ---> This shows package details.
 ```
 ### RedHat
 ```
-yum list | grep mount-ibmshare
-yum info mount-ibmshare
+yum list | grep mount.ibmshare
+yum info mount-.bmshare
 ```
 
 ## Code coverage and unit test cases
