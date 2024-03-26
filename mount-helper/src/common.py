@@ -761,6 +761,16 @@ class ShareConfig(ConfigEditor):
             return self.get_val("certificate_duration_seconds", False)
         return None
 
+    def get_metadata_retry_count(self):
+        if self.read():
+            return self.get_val("metadata_retry_count", False)
+        return None
+
+    def get_metadata_retry_interval(self):
+        if self.read():
+            return self.get_val("metadata_retry_interval", False)
+        return None
+
     def load_regions(self):
         regions = self.get_region()
         if regions:

@@ -108,6 +108,8 @@ _dev:
 	sed -i "s/region=/region=all/" ./install/share.conf
 	sed -i '1s/^/# Dev Environment certs\n/' ./install/share.conf
 	sed -i -e '$$a\\ncertificate_duration_seconds=3600' ./install/share.conf
+	sed -i -e '$$a\\nmetadata_retry_count=25' ./install/share.conf
+	sed -i -e '$$a\\nmetadata_retry_interval=60' ./install/share.conf
 	cd install && tar -czvf  ../$(INSTALL_TAR_FILE)  *
 	sha256sum ./$(INSTALL_TAR_FILE) > $(CHECKSUM_FILE)
 	@printf "Dev - Install package created ok: $(INSTALL_TAR_FILE)\n"
@@ -117,6 +119,8 @@ _prod:
 	python3 $(PYTHON_MERGE_SCRIPT) ./src "GENERATE_CONFIG"
 	sed -i "s/region=/region=all/" ./install/share.conf
 	sed -i -e '$$a\\ncertificate_duration_seconds=3600' ./install/share.conf
+	sed -i -e '$$a\\nmetadata_retry_count=25' ./install/share.conf
+	sed -i -e '$$a\\nmetadata_retry_interval=60' ./install/share.conf
 	cd install && tar -czvf  ../$(INSTALL_TAR_FILE)  *
 	sha256sum ./$(INSTALL_TAR_FILE) > $(CHECKSUM_FILE)
 	@printf "Production - Install package created ok: $(INSTALL_TAR_FILE)\n"
