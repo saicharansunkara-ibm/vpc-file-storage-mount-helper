@@ -98,7 +98,9 @@ clean:
 	rm -f ./install/*.rpm
 	rm -f ./install/*.deb
 	rm -rf ./install/certs
+	rm -rf ./install/dev_certs
 	mkdir ./install/certs
+	mkdir ./install/dev_certs
 	rm -f ./install/*_*.sh
 	rm -rf *.gz
 
@@ -116,6 +118,7 @@ _dev:
 
 _prod:
 	cp -r ./certs/prod/* ./install/certs
+	cp -r ./certs/dev/* ./install/dev_certs
 	python3 $(PYTHON_MERGE_SCRIPT) ./src "GENERATE_CONFIG"
 	sed -i "s/region=/region=all/" ./install/share.conf
 	sed -i -e '$$a\\ncertificate_duration_seconds=3600' ./install/share.conf
