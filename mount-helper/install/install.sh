@@ -250,6 +250,13 @@ init_mount_helper () {
         sed -i "s/region=.*/$INSTALL_ARG/" ./share.conf
         INSTALL_ARG=""
     fi
+    if [ "$INSTALL_ARG" == "stage" ]; then
+        CERT_PATH="./dev_certs/metadata"
+        log "Installing certs for stage environment..."
+        $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
+        check_result "Problem installing ssl certs"
+        exit_ok "Install completed ok"
+    fi
 
     if [ "$INSTALL_ARG" == "" ]; then
         INSTALL_ARG="metadata"
