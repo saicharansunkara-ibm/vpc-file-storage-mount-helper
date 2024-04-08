@@ -167,17 +167,19 @@ _install_app() {
     log "Installing package $PACKAGE_NAME"
     eval "$LINUX_INSTALL_APP $PACKAGE_NAME"
     check_result "Problem installing package: $PACKAGE_NAME"
+    log "Updating package $PACKAGE_NAME"
+    # Update the package 
+    if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
+        eval "yum update -y $PACKAGE_NAME"
+    elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
+        eval "apt-get install --only-upgrade -y $PACKAGE_NAME"
+    elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
+        eval "zypper update -y $PACKAGE_NAME"
+    fi
 }
 
 _install_apps() { 
     apps=($@)
-    if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
-        eval "yum update -y"
-    elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
-        eval "apt-get update -y"
-    elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
-        eval "zypper update -y"
-    fi
     for app in "${apps[@]}"; do
         if grep -q -i "strongswan" <<< "$app"; then
             check_available_version "$app" $MIN_STRONGSWAN_VERSION
