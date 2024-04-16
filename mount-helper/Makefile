@@ -1,5 +1,7 @@
 # Makefile to build deb and rpm packages to install mount.ibmshare on target Linux machines.
 
+include install/package_versions
+
 NAME := mount.ibmshare
 APP_VERSION := 0.0.3
 MAINTAINER := "Genctl Share"
@@ -8,7 +10,6 @@ LICENSE := "IBM"
 DEB_ARCH := all
 RPM_ARCH := noarch
 RPM_RELEASE_NUM := 1
-
 
 BUILD_DIR := $(NAME)-$(APP_VERSION)
 MOUNT_SCRIPT := /sbin/$(NAME)
@@ -134,7 +135,38 @@ build-deb: clean deb-build _prod
 
 dev: clean deb-build rpm-build _dev
 
-prod: clean deb-build rpm-build _prod
+prod:
+	@echo "=== Starting production build ==="
+	@echo "# Prepare dependencies for offline installation"
+	@mkdir -p ./install/packages/ && \
+		cd ./install/ && \
+		cp README packages/ && \
+		cp verifychksum.sh packages/ && \
+		cd ./packages/ && \
+		wget -O ubuntu-python3_$(PYTHON3_VERSION).deb "http://mirrors.kernel.org/ubuntu/pool/main/p/python3-defaults/python3_$(PYTHON3_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libstrongswan_$(LIBSTRONGSWAN_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/s/strongswan/libstrongswan_$(LIBSTRONGSWAN_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libstrongswan-standard-plugins_$(LIBSTRONGSWAN_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/s/strongswan/libstrongswan-standard-plugins_$(LIBSTRONGSWAN_VERSION)_amd64.deb" && \
+		wget -O ubuntu-strongswan-swanctl_$(STRONGSWAN_SWANCTL_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/universe/s/strongswan/strongswan-swanctl_$(STRONGSWAN_SWANCTL_VERSION)_amd64.deb" && \
+		wget -O ubuntu-strongswan-libcharon_$(STRONGSWAN_LIBCHARON_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/s/strongswan/strongswan-libcharon_$(STRONGSWAN_LIBCHARON_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libcharon-extauth-plugins_$(LIBCHARON_EXTAUTH_PLUGINS_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/s/strongswan/libcharon-extauth-plugins_$(LIBCHARON_EXTAUTH_PLUGINS_VERSION)_amd64.deb" && \
+		wget -O ubuntu-charon-systemd_$(CHARON_SYSTEMD_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/universe/s/strongswan/charon-systemd_$(CHARON_SYSTEMD_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libnfsidmap2_$(LIBNFSIDMAP2_VERSION).deb "http://mirrors.kernel.org/ubuntu/pool/main/libn/libnfsidmap/libnfsidmap2_$(LIBNFSIDMAP2_VERSION)_amd64.deb" && \
+		wget -O ubuntu-rpcbind_$(RPCBIND_VERSION).deb "http://mirrors.kernel.org/ubuntu/pool/main/r/rpcbind/rpcbind_$(RPCBIND_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libtirpc3_$(LIBTIRPC3_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/libt/libtirpc/libtirpc3_$(LIBTIRPC3_VERSION)_amd64.deb" && \
+		wget -O ubuntu-libtirpc-common_$(LIBTIRPC_COMMON_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/libt/libtirpc/libtirpc-common_$(LIBTIRPC_COMMON_VERSION)_all.deb" && \
+		wget -O ubuntu-keyutils_$(KEYUTILS_VERSION).deb "http://mirrors.kernel.org/ubuntu/pool/main/k/keyutils/keyutils_$(KEYUTILS_VERSION)_amd64.deb" && \
+        wget -O rhel-epel_$(EPEL_RELEASE_VERSION).rpm "https://dl.fedoraproject.org/pub/epel/epel-release-$(EPEL_RELEASE_VERSION).noarch.rpm" && \
+		wget -O rhel-strongswan_$(STRONGSWAN_VERSION).rpm "https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/s/strongswan-$(STRONGSWAN_VERSION).x86_64.rpm" && \
+		wget -O rhel-strongswan-sqlite_$(STRONGSWAN_VERSION).rpm "https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/s/strongswan-sqlite-$(STRONGSWAN_SQLITE_VERSION).x86_64.rpm" && \
+		wget -O ubuntu-nfs-common_$(NFS_COMMON_VERSION).deb "http://security.ubuntu.com/ubuntu/pool/main/n/nfs-utils/nfs-common_$(NFS_COMMON_VERSION)_amd64.deb" && \
+		wget -O rhel-nfs-utils_$(NFS_UTILS_VERSION).rpm "https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/Packages/nfs-utils-$(NFS_UTILS_VERSION).el8.x86_64.rpm" && \
+		wget -O rhel-iptables-services_$(IPTABLES_SERVICES_VERSION).rpm "https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/Packages/iptables-services-$(IPTABLES_SERVICES_VERSION).el8_9.x86_64.rpm" && \
+		cd ../../
+	# Build the package
+	@echo "=== Building mount helper package ==="
+	make clean deb-build rpm-build _prod
+
+	@echo "=== Production build completed ==="
 
 .PHONY : install
 .PHONY : test

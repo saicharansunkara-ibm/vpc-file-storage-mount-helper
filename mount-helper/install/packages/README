@@ -1,0 +1,49 @@
+This file contains checksums for downloaded packages:
+
+Checksum: 5ffcd9d6cc05b5e2f6e952a02e9308bf9c9aa35a11a4f683d474c27f44d7276e   ubuntu-libnfsidmap2_0.25-5.1ubuntu1.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/libnfsidmap2/download
+
+Checksum: ae5fd32e1ee1ff359b187e6b410c6ec6eac2c967bc24bd68bc07c7700b874ccc   ubuntu-keyutils_1.6-6ubuntu1.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/keyutils/download
+
+Checksum: f67c7baa1b76ba3ad682c00899ec71c73bdeb3c2dd2bf73251f971f51673beab   ubuntu-rpcbind_1.2.5-8.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/rpcbind/download
+
+Checksum: 85ca3a12be8b86c5d51b2d65f52dd98660c249761f7f0f073fd7010d82699364   ubuntu-python3_3.8.2-0ubuntu2.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/python3/download
+
+Checksum: 29b0c0963c8b6d4ac49e0054a490ffe5ffe2ba148cda51b022549e84d1a0a277   ubuntu-libtirpc3_1.2.5-1ubuntu0.1.deb
+Reference URL: https://packages.ubuntu.com/focal-updates/amd64/libtirpc3/download
+
+Checksum: 7cfefe439a586ff2114cb66dde1f94d29df92c0eeecd80480de1fabc49df59e4   ubuntu-libtirpc-common_1.2.5-1ubuntu0.1.deb
+Reference URL: https://packages.ubuntu.com/focal/all/libtirpc-common/download
+
+Checksum: 864e52669121da85a4893de799de275e37feff97b4930d7867bd5c93263ee79a   rhel-epel_latest-8.rpm
+Reference URL: https://dl.fedoraproject.org/pub/epel
+
+Checksum: 90544d8aae7da2b028b53d9f4029a8a66d8bbe12af6844ecfcfc282c9ec076ea   ubuntu-charon-systemd_5.8.2-1ubuntu3.6.deb
+Reference URL: https://packages.ubuntu.com/focal-updates/amd64/charon-systemd/download
+
+Checksum: 3bd5db91069dbefa41ab52823d27e50047be4aa4dfaf5b644cef308c3b07ef2e   ubuntu-strongswan-swanctl_5.8.2-1ubuntu3.6.deb
+Reference URL: https://packages.ubuntu.com/focal-updates/amd64/strongswan-swanctl/download
+
+Checksum: 6f60f3d581e65b8007cb8b6630d8b5304f3ce0ce5d23ec4ecbb67eb09a546085   rhel-strongswan_5.9.10-1.el8.rpm
+Reference URL: https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/s/strongswan-5.9.10-1.el8.x86_64.rpm
+
+Checksum: 825b957737d0db718926efc84f298c84c10d2c148eb7d573aa13dfa087cd8703   rhel-strongswan-sqlite_5.9.10-1.el8.rpm
+Reference URL: https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/s/strongswan-5.9.10-1.el8.x86_64.rpm
+
+Checksum: 3cd07d301ea9d473ed92b32c902bacedfa56db036d868ba7598da9ab660b64ea   rhel-nfs-utils_2.3.3-59.rpm
+Reference URL: https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/Packages/nfs-utils-2.3.3-59.el8.x86_64.rpm
+
+Checksum: b36da7596f2253029a6d20f118f43b3f7d157e8c3871dd5b84811098e787cd21   rhel-iptables-services_1.8.5-11.rpm
+Reference URL: https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/Packages/iptables-services-1.8.5-11.el8_9.x86_64.rpm
+
+Checksum: d76cb89fce80f38a142aa34d1b9311cc0ff0f28c91006c352516ebffb86db039   ubuntu-strongswan-libcharon_5.8.2-1ubuntu3.6.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/strongswan-libcharon/download
+
+Checksum: 9fb808dd10561fa01a96c6ff6b4910c25a35865314cd1010813e28bf95bdda50   ubuntu-libstrongswan_5.8.2-1ubuntu3.6.deb
+Reference URL: https://packages.ubuntu.com/focal/amd64/libstrongswan/download
+
+Checksum: b77e11a270b12dab02f6bf1a0f44a4d43fc6615923e35cd2e0818f84f197a60b   ubuntu-nfs-common_1.3.4-2.5ubuntu3.7.deb
+Reference URL: https://packages.ubuntu.com/focal-updates/amd64/nfs-common/download

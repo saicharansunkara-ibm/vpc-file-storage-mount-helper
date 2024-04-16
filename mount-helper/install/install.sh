@@ -5,6 +5,7 @@
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
 INSTALL_ARG="$1"
+source package_versions
 
 APP_NAME="IBM Mount Share Helper"
 SCRIPT_NAME="mount.ibmshare"
@@ -118,9 +119,25 @@ _remove_apps() {
         app="${apps[$i]}"
         log "Removing package $app"
         if [[ "$app" == *.deb ]]; then
-            apt-get purge -y --auto-remove "${app%-*}"
+            if is_linux LINUX_UBUNTU; then
+                app_name=$(echo "$app" | sed -E 's/^packages\/ubuntu-//; s/_.*//')
+                if [[ "$app_name" == *.deb ]]; then
+                    app_name="${app_name%.deb}"
+                fi
+                apt-get purge -y --auto-remove "${app_name}"
+            else
+                apt-get purge -y --auto-remove "${app%-*}"
+            fi
         elif [[ "$app" == *.rpm ]]; then
-            rpm -e --allmatches --nodeps "${app%-*}"
+            if is_linux LINUX_RED_HAT; then
+                app_name=$(echo "$app" | sed -E 's/^packages\/rhel-//; s/_.*//')
+                if [[ "$app_name" == *.rpm ]]; then
+                    app_name="${app_name%.rpm}"
+                fi
+                rpm -e --allmatches --nodeps "${app_name}"
+            else
+                rpm -e --allmatches --nodeps "${app%-*}"
+            fi
         else
             if [ "$INSTALL_APP" == "apt-get" ]; then
                 apt-get purge -y --auto-remove "$app"
@@ -181,13 +198,15 @@ _install_app() {
 _install_apps() { 
     apps=($@)
     for app in "${apps[@]}"; do
-        if grep -q -i "strongswan" <<< "$app"; then
-            check_available_version "$app" $MIN_STRONGSWAN_VERSION
+        if grep -q -i "strongswan" <<< "$app" && ! is_linux LINUX_UBUNTU && ! is_linux LINUX_RED_HAT; then
+                check_available_version "$app" $MIN_STRONGSWAN_VERSION
         fi
 
         if [[ "$app" == *.deb ]]; then
+            log "Installing package $app"
             dpkg --force-all -i "$app"
         elif [[ "$app" == *.rpm ]]; then
+            log "Installing package $app"
             rpm -i "$app" --force --nodeps
         else
             _install_app "$app" 
@@ -227,12 +246,18 @@ check_python3_installed () {
         cloud-init status --wait --long
     fi
 
-    PYTHON3_PACKAGE=$1
+    if is_linux LINUX_RED_HAT; then
+        PYTHON3_PACKAGE=$1
+    elif is_linux LINUX_UBUNTU; then
+        PYTHON3_PACKAGE=packages/ubuntu-python3_${PYTHON3_VERSION}.deb
+    else
+        PYTHON3_PACKAGE=$1
+    fi
     if command_not_exist python3; then
         if [ "$PYTHON3_PACKAGE" == "" ]; then
             exit_err "Python3 not installed"
         fi;
-        _install_app "$PYTHON3_PACKAGE"
+        _install_apps "$PYTHON3_PACKAGE"
     fi;
     PYTHON3_VERSION="$(get_current_python_version)"
     if version_less_than $PYTHON3_VERSION $MIN_PYTHON3_VERSION; then
@@ -280,7 +305,7 @@ if is_linux LINUX_UBUNTU; then
     export DEBIAN_FRONTEND=noninteractive
     check_python3_installed 
     apt-get -y remove needrestart
-    install_apps strongswan-swanctl charon-systemd  nfs-common mount.ibmshare*.deb
+    install_apps packages/ubuntu-libstrongswan-standard-plugins_${LIBSTRONGSWAN_VERSION}.deb packages/ubuntu-libcharon-extauth-plugins_${LIBCHARON_EXTAUTH_PLUGINS_VERSION}.deb packages/ubuntu-libstrongswan_${LIBSTRONGSWAN_VERSION}.deb packages/ubuntu-strongswan-swanctl_${STRONGSWAN_SWANCTL_VERSION}.deb packages/ubuntu-strongswan-libcharon_${STRONGSWAN_LIBCHARON_VERSION}.deb packages/ubuntu-charon-systemd_${CHARON_SYSTEMD_VERSION}.deb packages/ubuntu-libnfsidmap2_${LIBNFSIDMAP2_VERSION}.deb packages/ubuntu-libtirpc-common_${LIBTIRPC_COMMON_VERSION}.deb packages/ubuntu-libtirpc3_${LIBTIRPC3_VERSION}.deb packages/ubuntu-rpcbind_${RPCBIND_VERSION}.deb packages/ubuntu-keyutils_${KEYUTILS_VERSION}.deb packages/ubuntu-nfs-common_${NFS_COMMON_VERSION}.deb mount.ibmshare*.deb
     init_mount_helper
 fi;
 
@@ -294,10 +319,7 @@ fi;
 
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
-    if [ "$INSTALL_ARG" != "UNINSTALL" ]; then
-        yum install -y --nogpgcheck "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR_VERSION.noarch.rpm"
-    fi
-    install_apps strongswan  nfs-utils iptables mount.ibmshare*.rpm
+    install_apps packages/rhel-epel_${EPEL_RELEASE_VERSION}.rpm packages/rhel-strongswan-sqlite_${STRONGSWAN_SQLITE_VERSION}.rpm packages/rhel-strongswan_${STRONGSWAN_VERSION}.rpm packages/rhel-nfs-utils_${NFS_UTILS_VERSION}.rpm packages/rhel-iptables-services_${IPTABLES_SERVICES_VERSION}.rpm mount.ibmshare*.rpm
     init_mount_helper 
 fi;
 
