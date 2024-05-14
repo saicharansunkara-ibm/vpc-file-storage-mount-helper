@@ -98,6 +98,8 @@ clean:
 	rm -rf ./test/__pycache__
 	rm -f ./install/*.rpm
 	rm -f ./install/*.deb
+	rm -f ./install/packages/*.deb
+	rm -f ./install/packages/*.rpm
 	rm -rf ./install/certs
 	rm -rf ./install/dev_certs
 	mkdir ./install/certs

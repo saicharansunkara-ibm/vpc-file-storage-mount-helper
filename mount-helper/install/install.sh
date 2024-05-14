@@ -21,6 +21,7 @@ INSTALL_APP="Unknown"
 NAME=$(grep -oP '(?<=^NAME=).+' /etc/os-release | tr -d '"')
 VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
 MAJOR_VERSION=${VERSION%.*}
+INSTALLED_PACKAGE_LIST="/etc/pre_installed_packages.txt"
 
 #              Name              Min Version    Install
 LINUX_UBUNTU=("Ubuntu"           "18"           "$APT")
@@ -120,17 +121,32 @@ _remove_apps() {
         log "Removing package $app"
         if [[ "$app" == *.deb ]]; then
             if is_linux LINUX_UBUNTU; then
+                # Skip uninstallation in case /etc/pre_installed_packages.txt is missing in system
+                if [ ! -f "$INSTALLED_PACKAGE_LIST" ]; then
+                    log "Skipping uninstallation of packages as file '$INSTALLED_PACKAGE_LIST' is missing..."
+                    break
+                fi
                 app_name=$(echo "$app" | sed -E 's/^packages\/ubuntu-//; s/_.*//')
+                # Read preInstalled packages from system
+                if grep -q "^$app_name" $INSTALLED_PACKAGE_LIST ; then
+                    log "Skipping package $app_name for uninstallation as it was pre-installed on the system"
+                    continue 3
+                fi
                 if [[ "$app_name" == *.deb ]]; then
                     app_name="${app_name%.deb}"
                 fi
-                apt-get purge -y --auto-remove "${app_name}"
+                apt-get purge -y --no-auto-remove "${app_name}"
             else
                 apt-get purge -y --auto-remove "${app%-*}"
             fi
         elif [[ "$app" == *.rpm ]]; then
             if is_linux LINUX_RED_HAT; then
                 app_name=$(echo "$app" | sed -E 's/^packages\/rhel-//; s/_.*//')
+                # Read preInstalled packages from system
+                if grep -q "^$app_name" $INSTALLED_PACKAGE_LIST ; then
+                    log "Skipping package $app_name for uninstallation as it was pre-installed on the system"
+                    continue 3
+                fi
                 if [[ "$app_name" == *.rpm ]]; then
                     app_name="${app_name%.rpm}"
                 fi
@@ -197,15 +213,35 @@ _install_app() {
 
 _install_apps() { 
     apps=($@)
+
+    if is_linux LINUX_UBUNTU; then
+        # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
+        dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
+    elif is_linux LINUX_RED_HAT; then
+        rpm -qa --queryformat '%{NAME}\n' > $INSTALLED_PACKAGE_LIST
+    fi
+
     for app in "${apps[@]}"; do
         if grep -q -i "strongswan" <<< "$app" && ! is_linux LINUX_UBUNTU && ! is_linux LINUX_RED_HAT; then
-                check_available_version "$app" $MIN_STRONGSWAN_VERSION
+            check_available_version "$app" $MIN_STRONGSWAN_VERSION
         fi
 
         if [[ "$app" == *.deb ]]; then
+            app_name=$(echo "$app" | sed -E 's/^packages\/ubuntu-//; s/_.*//')
+            # Read preInstalled packages from system
+            if grep -q "^$app_name" $INSTALLED_PACKAGE_LIST ; then
+                log "Skipping package $app_name for uninstallation as it is pre-installed on the system"
+                continue 2
+            fi
             log "Installing package $app"
             dpkg --force-all -i "$app"
         elif [[ "$app" == *.rpm ]]; then
+            app_name=$(echo "$app" | sed -E 's/^packages\/rhel-//; s/_.*//')
+            # Read preInstalled packages from system
+            if grep -q "^$app_name" $INSTALLED_PACKAGE_LIST ; then
+                log "Skipping package $app_name for uninstallation as it is pre-installed on the system"
+                continue 2
+            fi
             log "Installing package $app"
             rpm -i "$app" --force --nodeps
         else
@@ -349,7 +385,3 @@ fi;
 
 
 exit_err "IbmMountHelper Install not supported $NAME $VERSION"
-
-
-
-
