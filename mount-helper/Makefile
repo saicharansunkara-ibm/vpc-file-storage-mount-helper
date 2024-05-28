@@ -9,7 +9,6 @@ DEB_ARCH := all
 RPM_ARCH := noarch
 RPM_RELEASE_NUM := 1
 
-
 BUILD_DIR := $(NAME)-$(APP_VERSION)
 MOUNT_SCRIPT := /sbin/$(NAME)
 
@@ -97,6 +96,7 @@ clean:
 	rm -rf ./test/__pycache__
 	rm -f ./install/*.rpm
 	rm -f ./install/*.deb
+	rm -f ./install/packages/
 	rm -rf ./install/certs
 	rm -rf ./install/dev_certs
 	mkdir ./install/certs
@@ -119,6 +119,7 @@ _dev:
 _prod:
 	cp -r ./certs/prod/* ./install/certs
 	cp -r ./certs/dev/* ./install/dev_certs
+	cp -r ./packages ./install/packages
 	python3 $(PYTHON_MERGE_SCRIPT) ./src "GENERATE_CONFIG"
 	sed -i "s/region=/region=all/" ./install/share.conf
 	sed -i -e '$$a\\ncertificate_duration_seconds=3600' ./install/share.conf
@@ -134,7 +135,13 @@ build-deb: clean deb-build _prod
 
 dev: clean deb-build rpm-build _dev
 
-prod: clean deb-build rpm-build _prod
+prod:
+	@echo "=== Starting production build ==="
+	# Build the package
+	@echo "=== Building mount helper package ==="
+	make deb-build rpm-build _prod
+
+	@echo "=== Production build completed ==="
 
 .PHONY : install
 .PHONY : test
