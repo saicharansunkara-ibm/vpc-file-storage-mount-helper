@@ -40,8 +40,8 @@ func init() {
 
 var (
 	logger     *zap.Logger
-	socketDir  = "/tmp/"
-	socketPath = socketDir + "mysocket.sock"
+	socketDir  = "/var/lib/"
+	socketPath = socketDir + "ibmshare.sock"
 )
 
 // SystemOperation is an interface for system operations like mount and unmount.
