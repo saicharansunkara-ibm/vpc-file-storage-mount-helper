@@ -96,7 +96,7 @@ clean:
 	rm -rf ./test/__pycache__
 	rm -f ./install/*.rpm
 	rm -f ./install/*.deb
-	rm -f ./install/packages/
+	rm -rf ./install/packages/
 	rm -rf ./install/certs
 	rm -rf ./install/dev_certs
 	mkdir ./install/certs
@@ -106,6 +106,7 @@ clean:
 
 _dev:
 	cp -r ./certs/dev/* ./install/certs
+	cp -r ./packages ./install/packages
 	python3 $(PYTHON_MERGE_SCRIPT) ./src "GENERATE_CONFIG"
 	sed -i "s/region=/region=all/" ./install/share.conf
 	sed -i '1s/^/# Dev Environment certs\n/' ./install/share.conf
