@@ -109,6 +109,8 @@ class MountIbmshare(MountHelperBase):
         self.unlock()
         out = self.RunCmd(args.get_mount_cmd_line(), "MountCmd", ret_out=True)
         if not out or out.is_error():
+            if out and isinstance(out.stderr, str) and "timed out" in out.stderr.lower():
+                self.LogError("Mount command timed out. Try to restart StrongSwan service.", code=SysApp.ERR_MOUNT + out.returncode)
             # we pass back the mount command exit code
             exit_code = SysApp.ERR_MOUNT + out.returncode if out else SysApp.ERR_MOUNT
             return self.LogError("Share mount failed.", code=exit_code)

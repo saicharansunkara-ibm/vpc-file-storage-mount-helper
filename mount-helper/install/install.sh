@@ -193,6 +193,60 @@ check_available_version() {
     echo "Package($app) - Available Version($app_ver) - Min Version($min_ver)"
 }
 
+setup_strongswan_restart_service() {
+    # Define the systemd service unit content
+    SERVICE_UNIT_CONTENT="[Unit]
+    Description=Restart StrongSwan service and log the event
+    After=network.target multi-user.target
+
+    [Service]
+    Type=oneshot
+    ExecStart=/bin/bash -c 'systemctl restart strongswan && echo \"$(date) - StrongSwan service restarted by systemd service\" >> /var/log/restart-strongswan.log'
+    RemainAfterExit=true
+
+    [Install]
+    WantedBy=multi-user.target
+    "
+
+    # Check if systemd is available
+    if pidof systemd > /dev/null; then
+        # Create the systemd service unit file
+        echo "$SERVICE_UNIT_CONTENT" | sudo tee /etc/systemd/system/restart-strongswan.service
+
+        # Reload systemd configuration
+        sudo systemctl daemon-reload
+
+        # Enable and start the service
+        sudo systemctl enable restart-strongswan.service
+        sudo systemctl start restart-strongswan.service
+
+        echo "StrongSwan restart service installed and enabled via systemd."
+    fi
+}
+
+remove_strongswan_restart_service() {
+    # Check if systemd is available
+    if pidof systemd > /dev/null; then
+        # Stop the service if it is running
+        sudo systemctl stop restart-strongswan.service
+
+        # Disable the service
+        sudo systemctl disable restart-strongswan.service
+
+        # Remove the service unit file
+        sudo rm /etc/systemd/system/restart-strongswan.service
+
+        # Reload systemd configuration
+        sudo systemctl daemon-reload
+
+        echo "StrongSwan restart service removed."
+    else
+        # Handle non-systemd systems 
+        echo "Non-systemd system detected. Please remove the StrongSwan restart service manually."
+    fi
+}
+
+
 _install_app() { 
     PACKAGE_NAME=$1
     log "Installing package $PACKAGE_NAME"
@@ -259,6 +313,7 @@ _install_apps() {
 install_apps() { 
     if [ "$INSTALL_ARG" == "UNINSTALL" ]; then
         _remove_apps "$@" 
+        remove_strongswan_restart_service
         exit_ok "UnInstall completed ok"
     fi
     _install_apps "$@" 
@@ -394,6 +449,7 @@ if is_linux LINUX_RED_HAT; then
         # Install the packages in the defined order
         install_apps "${packages[@]}" mount.ibmshare*.rpm
         init_mount_helper 
+        setup_strongswan_restart_service
     else
         if [ "$INSTALL_ARG" != "UNINSTALL" ]; then
             yum install -y --nogpgcheck "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR_VERSION.noarch.rpm"
@@ -406,12 +462,14 @@ if is_linux LINUX_CENTOS; then
     check_python3_installed python3
     install_apps epel-release strongswan strongswan-sqlite nfs-utils mount.ibmshare*.rpm
     init_mount_helper
+    setup_strongswan_restart_service
 fi;
 
 if is_linux LINUX_ROCKY; then
     check_python3_installed python39
     install_apps epel-release strongswan strongswan-sqlite nfs-utils mount.ibmshare*.rpm
     init_mount_helper
+    setup_strongswan_restart_service
 fi;
 
 if is_linux LINUX_SUSE; then
@@ -420,6 +478,7 @@ if is_linux LINUX_SUSE; then
     systemctl disable --now packagekit
     install_apps strongswan nfs-client mount.ibmshare*.rpm
     init_mount_helper
+    setup_strongswan_restart_service
 fi;
 
 if is_linux LINUX_FEDORA; then
