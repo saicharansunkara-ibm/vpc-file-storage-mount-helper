@@ -19,6 +19,7 @@ LINUX_INSTALL_APP=""
 INSTALL_APP="Unknown"
 NAME=$(grep -oP '(?<=^NAME=).+' /etc/os-release | tr -d '"')
 VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
+ARCH="uname -m"
 MAJOR_VERSION=${VERSION%.*}
 INSTALLED_PACKAGE_LIST="/etc/pre_installed_packages.txt"
 
@@ -224,7 +225,7 @@ _install_apps() {
             check_available_version "$app" $MIN_STRONGSWAN_VERSION
         fi
 
-        if is_linux LINUX_UBUNTU; then
+        if is_linux LINUX_UBUNTU && ([[ ! "$ARCH" = *"s390x"* ]]); then
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
