@@ -1,0 +1,9 @@
+epel-release
+strongswan-sqlite
+strongswan
+nfs-utils
+libnftnl
+libnfnetlink
+libnetfilter_conntrack
+iptables-libs
+iptables
