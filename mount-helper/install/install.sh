@@ -213,14 +213,17 @@ _install_app() {
 _install_apps() { 
     apps=($@)
 
-    if is_linux LINUX_UBUNTU; then
+    if is_linux LINUX_UBUNTU && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
         dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
-    elif is_linux LINUX_RED_HAT; then
+    elif is_linux LINUX_RED_HAT && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         rpm -qa --queryformat '%{NAME}\n' > $INSTALLED_PACKAGE_LIST
     fi
 
-    for app in "${apps[@]}"; do
+    for app in "${apps[@]}"; do 
+        if [[ (( "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--update-stage" )) && $app != "mount.ibmshare"* ]]; then
+            continue
+        fi
         if grep -q -i "strongswan" <<< "$app" && ! is_linux LINUX_UBUNTU && ! is_linux LINUX_RED_HAT; then
             check_available_version "$app" $MIN_STRONGSWAN_VERSION
         fi
@@ -262,7 +265,7 @@ _install_apps() {
 }
 
 install_apps() { 
-    if [ "$INSTALL_ARG" == "UNINSTALL" ]; then
+    if [ "$INSTALL_ARG" == "--uninstall" ]; then
         _remove_apps "$@" 
         exit_ok "UnInstall completed ok"
     fi
@@ -323,15 +326,14 @@ init_mount_helper () {
         sed -i "s/region=.*/$INSTALL_ARG/" ./share.conf
         INSTALL_ARG=""
     fi
-    if [ "$INSTALL_ARG" == "stage" ]; then
+    if [[ "$INSTALL_ARG" == "stage" || "$INSTALL_ARG" == "--update-stage" ]]; then
         CERT_PATH="./dev_certs/metadata"
         log "Installing certs for stage environment..."
         $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
         check_result "Problem installing ssl certs"
         exit_ok "Install completed ok"
     fi
-
-    if [ "$INSTALL_ARG" == "" ]; then
+    if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" ]]; then
         INSTALL_ARG="metadata"
     fi
     log "Installing certs for: $INSTALL_ARG"
@@ -400,7 +402,7 @@ if is_linux LINUX_RED_HAT; then
         install_apps "${packages[@]}" mount.ibmshare*.rpm
         init_mount_helper 
     else
-        if [ "$INSTALL_ARG" != "UNINSTALL" ]; then
+        if [ "$INSTALL_ARG" != "--uninstall" ]; then
             yum install -y --nogpgcheck "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR_VERSION.noarch.rpm"
         fi
         install_apps strongswan  nfs-utils iptables mount.ibmshare*.rpm
