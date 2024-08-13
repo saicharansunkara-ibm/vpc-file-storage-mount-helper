@@ -15,6 +15,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 |------|-------|--------|--------|--------|
 | 0.0.2 | mount.ibmshare-0.0.3 | v0.0.5 | April 05, 2024 | - Initial production release |
 | 0.0.3 | mount.ibmshare-0.0.4 | v0.0.6 | May 24, 2024 | - Changed UNIX socket path |
+| 0.0.4 | mount.ibmshare-0.0.5 | v0.0.8 | Aug 16, 2024 | - Changed mount.ibmshare dep to 0.0.5 (VSI reboot fix, MH update handling, RHEL 8.10 packages added) |
 
 ## Package Building
 
