@@ -248,7 +248,18 @@ remove_strongswan_restart_service() {
 _install_app() { 
     PACKAGE_NAME=$1
     log "Installing package $PACKAGE_NAME"
-    eval "$LINUX_INSTALL_APP $PACKAGE_NAME"
+    # Install the package with specific conditions for mount.ibmshare* packages
+    if [[ $PACKAGE_NAME == mount.ibmshare* ]]; then
+        if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
+            eval "yum install $PACKAGE_NAME --nogpgcheck"
+        elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
+            eval "apt-get --allow-unauthenticated install $PACKAGE_NAME"
+        elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
+            eval "zypper --no-gpg-checks install $PACKAGE_NAME"
+        fi
+    else
+        eval "$LINUX_INSTALL_APP $PACKAGE_NAME"
+    fi
     check_result "Problem installing package: $PACKAGE_NAME"
     log "Updating package $PACKAGE_NAME"
     # Update the package 
