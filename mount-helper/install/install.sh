@@ -22,6 +22,7 @@ VERSION=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
 ARCH="uname -m"
 MAJOR_VERSION=${VERSION%.*}
 INSTALLED_PACKAGE_LIST="/etc/pre_installed_packages.txt"
+DOWNLOADED_RHEL_PACKAGE_PATH="packages/rhel/$VERSION"
 
 #              Name              Min Version    Install
 LINUX_UBUNTU=("Ubuntu"           "18"           "$APT")
@@ -138,7 +139,7 @@ _remove_apps() {
             fi
             apt-get purge -y --no-auto-remove "$app"
         elif is_linux LINUX_RED_HAT; then
-            if [[ $VERSION == 8.8 || $VERSION == 8.9 || $VERSION == 8.10 ]]; then
+            if [ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]; then
                 # Skip uninstallation in case /etc/pre_installed_packages.txt is missing in system
                 if [ ! -f "$INSTALLED_PACKAGE_LIST" ]; then
                     log "Skipping uninstallation of packages as file '$INSTALLED_PACKAGE_LIST' is missing..."
@@ -303,7 +304,7 @@ _install_apps() {
             fi
             PACKAGE_DIR="packages/ubuntu/$VERSION"
             dpkg --force-all -i "$PACKAGE_DIR/$app"*
-        elif  is_linux LINUX_RED_HAT && ([[ $VERSION == 8.8 || $VERSION == 8.9 || $VERSION == 8.10 ]]); then
+        elif  is_linux LINUX_RED_HAT && ([[ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]]); then
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
@@ -448,7 +449,7 @@ fi;
 
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
-    if [[ $VERSION == 8.8 || $VERSION == 8.9 || $VERSION == 8.10 ]]; then
+    if [ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]; then
         # Define the path to the package list file based on the Ubuntu version
         PACKAGE_LIST_PATH="packages/rhel/$VERSION/package_list"
 
