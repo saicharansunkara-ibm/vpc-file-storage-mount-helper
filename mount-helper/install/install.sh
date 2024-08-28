@@ -5,6 +5,7 @@
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
 INSTALL_ARG="$1"
+INSTALL_MOUNT_OPTION_ARG="$2"
 
 APP_NAME="IBM Mount Share Helper"
 SCRIPT_NAME="mount.ibmshare"
@@ -60,6 +61,14 @@ check_linux_version () {
         exit_err "Can only install on $NAME version $MIN_VER or greater. Current version:$VERSION"
     fi;
     log "Linux($NAME) Version($VERSION) distro"
+}
+
+check_tls_supported_linux_verion() {
+    if { is_linux LINUX_UBUNTU &&  [[ "$VERSION" == 24.04 ]]; } || { is_linux LINUX_RED_HAT && [[ "$VERSION" == 9.4 ]]; } || { is_linux LINUX_ROCKY && [[ "$VERSION" == 9.4 ]]; }; then
+        log "Linux($NAME) Version($VERSION) supports TLS"
+    else
+        exit_err "TLS is not supported on this OS version"
+    fi
 }
 
 is_linux () {
@@ -388,22 +397,75 @@ disable_metadata () {
     sed -i 's/USE_METADATA_SERVICE = True/USE_METADATA_SERVICE = False/' $SBIN_SCRIPT
 }
 
+install_tls_certificates() {
+    CERT_PATH="$1"  
+    if is_linux LINUX_UBUNTU &&  [[ "$VERSION" == 24.04 ]]; then
+        TLS_CERT_PATH="/usr/local/share/ca-certificates" 
+        cp "$CERT_PATH"/* "$TLS_CERT_PATH/"
+        if [ $? -eq 0 ]; then
+            echo "CA certificates for TLS copied successfully to usr/local/share/ca-certificates."
+        else
+            exit_err "Error: Failed to copy ca-certificates for TLS copied ."      
+        fi
+        echo "Updating CA certificates..."
+        sudo update-ca-certificates
+        if [ $? -eq 0 ]; then
+            echo "CA certificates updated successfully."
+        else
+            exit_err "Error: Failed to update CA certificates."      
+        fi 
+    fi
+    if { is_linux LINUX_RED_HAT && [[ "$VERSION" == 9.4 ]]; } || { is_linux LINUX_ROCKY && [[ "$VERSION" == 9.4 ]]; }; then
+       TLS_CERT_PATH="/etc/pki/ca-trust/source/anchors"
+       for CERT in "$CERT_PATH"/*.crt; do
+            if [ -f "$CERT" ]; then
+                CERT_NAME=$(basename "$CERT" .crt)
+                sudo cp "$CERT" "$TLS_CERT_PATH/$CERT_NAME.pem"
+            fi
+        done
+        if [ $? -eq 0 ]; then
+            echo "CA certificates for TLS copied and renamed successfully to $TLS_CERT_PATH."
+        else
+             exit_err "Error: Failed to copy CA certificates."
+        fi
+        echo "Updating CA certificates..."
+        sudo update-ca-trust anchors
+        if [ $? -eq 0 ]; then
+            echo "CA certificates updated successfully."
+        else
+            exit_err "Error: Failed to update CA certificates."      
+        fi
+    fi
+}
 init_mount_helper () {
     if [[ "$INSTALL_ARG" == "region="* ]]; then
         log "Updating config file: ./share.conf"
         sed -i "s/region=.*/$INSTALL_ARG/" ./share.conf
         INSTALL_ARG=""
     fi
+    if [[ "$INSTALL_MOUNT_OPTION_ARG" == "stage" ]]; then
+        exit_err "incorrect command, pass stage as first arg."
+    fi
+    if [[ "$INSTALL_ARG" == "--tls" || "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+        check_tls_supported_linux_verion
+    fi
     if [[ "$INSTALL_ARG" == "stage" || "$INSTALL_ARG" == "--update-stage" ]]; then
         CERT_PATH="./dev_certs/metadata"
         log "Installing certs for stage environment..."
         $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
         check_result "Problem installing ssl certs"
+        if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+            install_tls_certificates $CERT_PATH
+        fi
         exit_ok "Install completed ok"
     fi
-    if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" ]]; then
+    if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--tls" ]]; then
+        if [[ "$INSTALL_ARG" == "--tls" ]]; then
+            INSTALL_MOUNT_OPTION_ARG="--tls"
+        fi
         INSTALL_ARG="metadata"
     fi
+
     log "Installing certs for: $INSTALL_ARG"
     CERT_PATH="./certs/$INSTALL_ARG"
     if [ ! -d $CERT_PATH ]; then
@@ -414,6 +476,9 @@ init_mount_helper () {
     fi
     $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
     check_result "Problem installing ssl certs"
+    if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+      install_tls_certificates $CERT_PATH
+    fi
     exit_ok "Install completed ok"
 }
 
