@@ -311,9 +311,13 @@ _install_apps() {
                 continue 
             fi
             log "Installing package $app"
-            if [[ $app == "mount.ibmshare"* ]]; then
-                rpm -i "$app" --force --nodeps --nodigest --nosignature
-                continue
+            if [[ $app == mount.ibmshare* ]]; then
+                if [[ "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--update-stage" ]]; then
+                    rpm -U "$app" --force --nodeps --nodigest --nosignature
+                else
+                    rpm -i "$app" --force --nodeps --nodigest --nosignature
+                fi
+            continue
             fi
             if [[ $app == *"python"* ]]; then
                 rpm -i "$app" --force --nodeps
