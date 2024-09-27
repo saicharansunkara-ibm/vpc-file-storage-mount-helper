@@ -74,7 +74,7 @@ class MountIbmshare(MountHelperBase):
 
     def mount(self, args):
         if not self.is_share_mounted(args.ip_address, args.mount_path):
-            if not args.is_secure:
+            if not args.is_secure or args.is_tls:
                 self.LogUser("Non-IPsec mount requested.")
                 ipsec = self.get_ipsec_mgr()
                 if ipsec:

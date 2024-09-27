@@ -508,6 +508,7 @@ class MountHelperBase(MountHelperLogger):
 
 class SystemCtl(MountHelperBase):
     EXE_PATH = "/bin/systemctl"
+    OS_PATH= "/etc/os-release"
     SYSTEMD_VERSION_SUPPORTS_UTC = 228
 
     def __init__(self, name):
@@ -552,7 +553,46 @@ class SystemCtl(MountHelperBase):
     def systemd_version(self):
         version = get_app_version(self.EXE_PATH, "systemd")
         return to_int(version) if version else 0
-
+    
+    def get_os_version(self):
+        if self.FileExists(self.OS_PATH):
+            content = self.ReadFile(self.OS_PATH, log=False) 
+            match = re.search(r'^VERSION_ID="([^"]+)"', content, re.MULTILINE)
+            return match.group(1)
+        
+    def get_os_name(self):
+        if self.FileExists(self.OS_PATH):
+            content = self.ReadFile(self.OS_PATH, log=False) 
+            match = re.search(r'^NAME="([^"]*)"', content, re.MULTILINE)
+            return match.group(1)
+        
+    def is_kernel_version_6_or_higher(self):
+        result = subprocess.run(['uname', '-r'], capture_output=True, text=True, check=True)
+        version = result.stdout.strip()
+        major_version = int(version.split('.')[0])
+        return major_version >= 6
+    
+    def check_tls_enabled_os(self, os_list):
+        os_name= self.get_os_name()
+        os_version= self.get_os_version()
+        enabled = f"{os_name} {os_version}"
+        
+        return enabled in os_list 
+    
+    def tls_package_installed(self,package_name):
+        os_name= self.get_os_name()
+        if os_name == 'Ubuntu':
+            # For Ubuntu and Debian-based systems
+            command = ['dpkg', '-l']
+            output = subprocess.check_output(command).decode()
+            return package_name in output  
+        elif os_name in ['Red Hat Enterprise Linux','Rocky Linux']:
+            # For RHEL, CentOS, and Rocky Linux
+            command = ['rpm', '-qa']
+            output = subprocess.check_output(command).decode().strip()
+            return package_name in output
+        return 'not installed' not in output
+    
     def action(self, action, arg=None, silent=False):
         cmd = [self.EXE_PATH, action]
         if arg:
@@ -649,7 +689,6 @@ def version_compare(version1, version2):
     def fix(v):
         return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
     return cmp(fix(version1), fix(version2))
-
 
 class ConfigEditor(MountHelperBase):
     def __init__(self, fname):
