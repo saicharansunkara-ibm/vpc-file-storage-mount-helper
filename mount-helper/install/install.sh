@@ -344,6 +344,9 @@ install_apps() {
     if [ "$INSTALL_ARG" == "--uninstall" ]; then
         _remove_apps "$@" 
         remove_strongswan_restart_service
+        if is_linux LINUX_SUSE; then
+           sudo systemctl unmask strongswan.service
+        fi
         exit_ok "UnInstall completed ok"
     fi
     _install_apps "$@" 
