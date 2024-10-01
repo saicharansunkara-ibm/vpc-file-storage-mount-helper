@@ -6,8 +6,9 @@ This is a REST based mount-helper-container service which is used for mounting E
 
 | IKS/ROKS Version | Image/Distribution | Mount-Helper-Container Supported | 
 |------|-------|--------|
-| ROKS 4.16 | RHEL 8.9 | :heavy_check_mark: |
-| IKS 1.30 | Ubuntu 20.04 | :heavy_check_mark: |
+| ROKS 4.16 | RHEL 8.10 | :heavy_check_mark: |
+| IKS 1.30 | Ubuntu 20.04, 24.04 | :heavy_check_mark: |
+| IKS 1.30 | Ubuntu 20.04, 24.04 | :heavy_check_mark: |
 
 ## Changelog + Package Dependencies:
 
@@ -17,6 +18,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 | 0.0.3 | mount.ibmshare-0.0.4 | v0.0.6 | May 24, 2024 | - Changed UNIX socket path |
 | 0.0.4 | mount.ibmshare-0.0.5 | v0.0.8 | Aug 16, 2024 | - Changed mount.ibmshare dep to 0.0.5 (VSI reboot fix, MH update handling, RHEL 8.10 packages added) |
 | 0.0.5 | mount.ibmshare-0.0.6 | v0.0.9 | Aug 26, 2024 | - Changed mount.ibmshare dep to 0.0.6 (RHEL 9 offline package support) |
+| 0.0.6 | mount.ibmshare-0.0.7 | v0.0.10 | Sep 17, 2024 | - Changed mount.ibmshare dep to 0.0.6 (Fix bug with --update flag) |
 
 ## Package Building
 
