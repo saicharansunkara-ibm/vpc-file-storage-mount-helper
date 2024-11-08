@@ -261,7 +261,7 @@ _install_app() {
     # Install the package with specific conditions for mount.ibmshare* packages
     if [[ $PACKAGE_NAME == mount.ibmshare* ]]; then
         if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
-            eval "yum install $PACKAGE_NAME --nogpgcheck"
+            eval "yum install -y $PACKAGE_NAME --nogpgcheck"
         elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
             eval "apt-get --allow-unauthenticated install $PACKAGE_NAME"
         elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
