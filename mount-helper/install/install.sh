@@ -265,7 +265,7 @@ _install_app() {
         elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
             eval "apt-get --allow-unauthenticated install $PACKAGE_NAME"
         elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
-            eval "zypper --no-gpg-checks install $PACKAGE_NAME"
+            eval "zypper --no-gpg-checks install -y $PACKAGE_NAME"
         fi
     else
         eval "$LINUX_INSTALL_APP $PACKAGE_NAME"
