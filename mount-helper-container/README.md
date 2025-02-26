@@ -21,6 +21,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 | 0.0.6 | mount.ibmshare-0.0.7 | v0.1.0 | Oct 1, 2024 | - Changed mount.ibmshare dep to 0.0.6 (Fix bug with --update flag) |
 | 0.0.7 | mount.ibmshare-0.0.8 | v0.1.1 | Nov 8, 2024 | - Changed mount.ibmshare dep to 0.0.7 (Add Cert for dev env) |
 | 0.0.8 | mount.ibmshare-0.0.9 | v0.1.2 | Feb 17, 2025 | - Changed mount.ibmshare dep to 0.0.8 (Fix bug with --update flag, VPC Region Naming convention, Add cert for dev) |
+| 0.0.9 | mount.ibmshare-0.1.0 | v0.1.3 | Feb 26, 2025 | - Changed mount.ibmshare dep to 0.0.9 (Add tls Cert for dev and stage) |
 
 ## Package Building
 
