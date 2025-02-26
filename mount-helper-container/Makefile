@@ -51,7 +51,7 @@ deb-build: build-linux
 	echo "Maintainer: $(MAINTAINER)" >> $(DEBIAN_CONTROL)
 	echo "Architecture: $(DEB_ARCH)" >> $(DEBIAN_CONTROL)
 	echo "Description: $(DESCRIPTION)" >> $(DEBIAN_CONTROL)
-	echo "Depends: mount.ibmshare-0.0.9" >> $(DEBIAN_CONTROL)
+	echo "Depends: mount.ibmshare-0.1.0" >> $(DEBIAN_CONTROL)
 
 	dpkg-deb --build $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)
@@ -71,7 +71,7 @@ rpm-build: build-linux
 	echo "Summary: $(DESCRIPTION)" >> $(REDHAT_SPEC)
 	echo "License: $(LICENSE)" >>  $(REDHAT_SPEC)
 	echo "BuildArch: $(RPM_ARCH)" >>  $(REDHAT_SPEC)
-	echo "Requires: mount.ibmshare = 0.0.9" >> $(REDHAT_SPEC)
+	echo "Requires: mount.ibmshare = 0.1.0" >> $(REDHAT_SPEC)
 	echo "%define _rpmfilename $(NAME)-$(APP_VERSION).rpm" >> $(REDHAT_SPEC)
 	echo "%build" >> $(REDHAT_SPEC)
 
