@@ -61,20 +61,75 @@ install_stunnel_suse() {
     fi
 }
 
+# Uninstall stunnel on Ubuntu/Debian-based systems
+uninstall_stunnel_ubuntu_debian() {
+    echo "Uninstalling stunnel on Ubuntu/Debian-based system..."
+    sudo apt-get remove --purge -y stunnel4
+    sudo rm -rf /var/run/stunnel4/ /etc/stunnel
+
+    if ! command -v stunnel > /dev/null; then
+        echo "stunnel uninstalled successfully!"
+    else
+        echo "Failed to uninstall stunnel."
+        exit 1
+    fi
+}
+
+# Uninstall stunnel on Red Hat/CentOS/Rocky-based systems
+uninstall_stunnel_rhel_centos_rocky() {
+    echo "Uninstalling stunnel on Red Hat/CentOS/Rocky-based system..."
+    sudo yum remove -y stunnel
+    sudo rm -rf /var/run/stunnel4/ /etc/stunnel
+
+    if ! command -v stunnel > /dev/null; then
+        echo "stunnel uninstalled successfully!"
+    else
+        echo "Failed to uninstall stunnel."
+        exit 1
+    fi
+}
+
+# Uninstall stunnel on SUSE-based systems
+uninstall_stunnel_suse() {
+    echo "Uninstalling stunnel on SUSE-based system..."
+    sudo zypper remove -y stunnel
+    sudo rm -rf /var/run/stunnel4/ /etc/stunnel
+
+    if ! command -v stunnel > /dev/null; then
+        echo "stunnel uninstalled successfully!"
+    else
+        echo "Failed to uninstall stunnel."
+        exit 1
+    fi
+}
+
 # Function to detect the OS and install stunnel
-detect_and_install() {
+detect_and_handle() {
+    ACTION=$1
     # Check the OS distribution
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         case "$ID" in
-            ubuntu|debian)
+        ubuntu|debian)
+            if [ "$ACTION" == "install" ]; then
                 install_stunnel_ubuntu_debian
-                ;;
-            centos|rhel|rocky)
+            elif [ "$ACTION" == "uninstall" ]; then
+                uninstall_stunnel_ubuntu_debian
+            fi
+            ;;
+        centos|rhel|rocky)
+            if [ "$ACTION" == "install" ]; then
                 install_stunnel_rhel_centos_rocky
-                ;;
-            suse|sles)
+            elif [ "$ACTION" == "uninstall" ]; then
+                uninstall_stunnel_rhel_centos_rocky
+            fi
+            ;;
+        suse|sles)
+            if [ "$ACTION" == "install" ]; then
                 install_stunnel_suse
+            elif [ "$ACTION" == "uninstall" ]; then
+                uninstall_stunnel_suse
+            fi
                 ;;
             *)
                 echo "Unsupported OS: $ID"
@@ -86,6 +141,13 @@ detect_and_install() {
         exit 1
     fi
 }
+
+# Default action is install
+ACTION=${1:-install}
+if [[ "$ACTION" != "install" && "$ACTION" != "uninstall" ]]; then
+    echo "Invalid argument. Please specify 'install' or 'uninstall'."
+    exit 1
+fi
 
 # Start the installation process
 detect_and_install
