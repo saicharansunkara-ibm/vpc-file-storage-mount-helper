@@ -101,7 +101,6 @@ clean:
 	rm -rf ./install/dev_certs
 	mkdir ./install/certs
 	mkdir ./install/dev_certs
-	rm -f ./install/*_*.sh
 	rm -rf *.gz
 
 _dev:

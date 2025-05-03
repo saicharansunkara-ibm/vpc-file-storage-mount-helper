@@ -1,4 +1,4 @@
-# Copyright (c) IBM Corp. 2023. All Rights Reserved.
+# Copyright (c) IBM Corp. 2025. All Rights Reserved.
 # Project name: VPC File Storage Mount Helper
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
@@ -11,15 +11,20 @@ import subprocess
 out_lines = []
 out_imports = []
 
-py_files = ["common",
-            "config",
-            "certificate_handler",
-            "args_handler",
-            "file_lock",
-            "timer_handler",
-            "metadata",
-            "renew_certs",
-            "mount_ibmshare"]
+py_files = [
+    "common",
+    "config",
+    "certificate_handler",
+    "args_handler",
+    "file_lock",
+    "timer_handler",
+    "metadata",
+    "renew_certs",
+    "stunnel_config_get",
+    "stunnel_config_create",
+    "find_free_stunnel_port",
+    "mount_ibmshare",
+]
 
 
 def get_files_in_folder(src, filter="*"):
@@ -36,7 +41,7 @@ def listToString(lst):
 
 
 def readLines(fname):
-    print("Reading:"+fname)
+    print("Reading:" + fname)
     return open(fname).read().splitlines()
 
 
@@ -50,7 +55,7 @@ def extract_imports(path, name, names):
             if line not in out_imports:
                 for name in names:
                     if name in line:  # dont add names
-                        print("Removing: "+line)
+                        print("Removing: " + line)
                         line = ""
                         break
                 if len(line) > 0:
@@ -82,7 +87,15 @@ def do_merge(input_folder, out_filename):
     for name in py_files:
         extract_imports(input_folder, name, py_files)
 
-    hdr = "#!/usr/bin/env python3\n##Do not edit created by merge script##\n\n"
+    hdr = (
+        "#!/usr/bin/env python3\n"
+        "#\n"
+        "# Copyright (c) IBM Corp. 2025. All Rights Reserved.\n"
+        "# Project name: VPC File Storage Mount Helper\n"
+        "# This project is licensed under the MIT License, see LICENSE file in the root directory.\n"
+        "# Created by merge script.\n"
+        "# Do not edit.\n"
+    )
     txt = hdr + listToString(out_imports) + listToString(out_lines)
     write_file(out_filename, txt)
     return True
@@ -93,6 +106,7 @@ def generate_config_file(src_folder):
     certs_folder = src_folder.replace("/src", "/install/certs/metadata")
     sys.path.insert(0, src_folder)
     from common import ShareConfig
+
     cfg = ShareConfig(install_folder, certs_folder)
     return cfg.create()
 
@@ -115,5 +129,5 @@ def main():
     sys.exit(0 if ret else 1)  # success or failure
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
