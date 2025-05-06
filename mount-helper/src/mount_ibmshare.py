@@ -4,19 +4,31 @@
 # Project name: VPC File Storage Mount Helper
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
-
 from args_handler import ArgsHandler
 from common import *
 import file_lock
+import os
+import signal
 import timer_handler
+import traceback
 from renew_certs import RenewCerts
 from config import LocalInstall, StrongSwanConfig
+import stunnel_config_create, find_free_stunnel_port
+from stunnel_config_get import StunnelConfigGet
+
+LOOPBACK_ADDRESS = "127.0.0.1"
+MOUNT_PORT = 20049
+STUNNEL_COMMAND = "stunnel"
 
 
 class MountIbmshare(MountHelperBase):
     def __init__(self):
         self.mounts = []
         self.lockhandler = file_lock.LockHandler.mount_share_lock()
+
+    def set_installed_stunnel(self):
+        # We have not determined how certs are going to be handled.
+        return True
 
     def set_installed_ipsec(self):
         ss_obj = StrongSwanConfig()
@@ -60,17 +72,198 @@ class MountIbmshare(MountHelperBase):
     def unlock(self):
         return self.lockhandler.release_lock()
 
-   # Method to check whether nfs share is already mounted.
+    # Method to check whether nfs share is already mounted.
     def is_share_mounted(self, ip_address, mount_path):
         self.mounts = NfsMount().load_nfs_mounts()
-        if self.mounts is None:
-            return True  # Force app to exit app
+        # if self.mounts is None:
+        # return True  # Force app to exit app
         for mount in self.mounts:
             if mount.ip == ip_address and mount.mount_path == mount_path:
-                self.LogUser('Share is already mounted at: ' +
-                             mount.mounted_at)
+                self.LogUser("Found a mount at: " + mount.mounted_at)
                 return True
         return False
+
+    def process_stunnel_mount(self, args):
+        ip_address = args.ip_address
+        mount_path = args.mount_path
+        config_file_found = False
+
+        mounted = self.is_share_mounted(LOOPBACK_ADDRESS, mount_path)
+
+        # Identify a port for stunnel.
+        port = FindFreeSTunnelPort(LOOPBACK_ADDRESS).get_free_port()
+
+        if port == -1:
+            self.LogError("No Free ports found for use by Stunnel.")
+            return False
+
+        self.LogDebug(f"Local port {port} is being used for setting up stunnel")
+        st = StunnelConfigGet()
+        st.open_with_remote_path(mount_path)
+        config_file_found = st.is_found()
+
+        pid_file_dir = StunnelConfigGet.get_pid_file_dir()
+        if not os.path.isdir(pid_file_dir):
+            try:
+                os.makedirs(pid_file_dir, exist_ok=True)
+            except OSError as ex:
+                self.LogError(
+                    f'Attempt to create directory "{pid_file_dir}" resulted in an exception {ex}. Please fix and retry'
+                )
+                return False
+
+        if not os.access(pid_file_dir, os.W_OK):
+            self.LogError(
+                f'The directory "{pid_file_dir}" is not writable. Make it writable and retry'
+            )
+            return False
+
+        if not config_file_found and not mounted:
+            if not self.start_stunnel(port, ip_address, mount_path):
+                return False
+            return self.run_stunnel_mount_command(port, mount_path)
+
+        elif not config_file_found and mounted:
+            self.LogError(
+                "Share is already mounted but the stunnel conf is missing. Perhaps was deleted manually."
+            )
+
+        elif config_file_found and not mounted:
+            # Old conf file, from a prev mount. But no mounted share. Remove, recreate and start stunnel.
+            if not self.kill_stunnel_pid(mount_path):
+                return False
+            # Recreate conf file and start stunnel.
+            if not self.start_stunnel(port, ip_address, mount_path):
+                return False
+            # Now do the mount
+            return self.run_stunnel_mount_command(port, mount_path)
+
+        elif config_file_found and mounted:
+            return True
+
+    # Cleans up unused conf files. Should not throw exception and prevent mount.
+    def cleanup_stale_conf(self):
+        for filename in os.listdir(StunnelConfigGet.STUNNEL_DIR_NAME):
+            if (
+                filename.endswith(StunnelConfigGet.STUNNEL_CONF_EXT)
+                and StunnelConfigGet.IBM_SHARE_SIG in filename
+            ):
+                st = StunnelConfigGet()
+                full_file_name = os.path.join(
+                    StunnelConfigGet.STUNNEL_DIR_NAME, filename
+                )
+                st.open_with_full_path(full_file_name)
+                if st.is_found():
+                    mount_path = st.get_full_mount_path()
+                    if not self.is_share_mounted(LOOPBACK_ADDRESS, mount_path):
+                        self.kill_stunnel_pid(mount_path)
+                        try:
+                            self.RemoveFile(full_file_name)
+                        except Exception as e:
+                            self.LogError(f"Removefile returned and exception:{e}")
+
+    def kill_stunnel_pid(self, mount_path):
+        st = StunnelConfigGet()
+        st.open_with_remote_path(mount_path)
+        if not st.is_found():
+            return False
+        else:
+            try:
+                pid_file = st.get_pid_file()
+                with open(pid_file, "r") as file:
+                    pid = int(file.readline().strip())
+                    if pid != 0:  # 0 targets process group. Must avoid.
+                        os.kill(pid, signal.SIGKILL)
+            # These may not cause problems. However, if start stunnel throws errors, we need to handle.
+            except FileNotFoundError as fnf:
+                # Perhaps, we could do equivalent of
+                # kill -9 $(ps -ef| grep "/usr/bin/stunnel4 $CONF_FILE"| awk '{print $2 }' ?
+                pass
+            except ValueError as ve:
+                pass
+            except ProcessLookupError as ple:
+                pass
+            except Exception as e:
+                self.LogError(f"Method kill_stunnel_pid failed with exception {e}")
+                return False
+            finally:
+                try:
+                    os.remove(pid_file)
+                except:
+                    pass
+            return True
+
+    # Create conf file and start stunnel.
+    def start_stunnel(self, port, ip_address, mount_path):
+        self.LogDebug(f"Starting stunnel for mounting {mount_path}")
+        st = StunnelConfigCreate(
+            accept_ip=LOOPBACK_ADDRESS,
+            accept_port=port,
+            connect_ip=ip_address,
+            connect_port=MOUNT_PORT,
+            remote_path=mount_path,
+        )
+        if not st.is_valid():
+            self.LogError(st.get_error())
+            return False
+        else:
+            conf_file = st.get_config_file()
+            self.LogDebug(f"Stunnel conf file created {conf_file}")
+            try:
+                current_path = os.environ.get("PATH", " ")
+                # Dirs where stunnel command is found on various OS versions
+                additional_path = "/usr/bin:/usr/sbin"
+                new_path = f"{additional_path}:{current_path}"
+                env_copy = os.environ.copy()
+                env_copy["PATH"] = new_path
+                self.LogDebug(f"Attempting to start stunnel using {conf_file}")
+                result = subprocess.run(
+                    [STUNNEL_COMMAND, conf_file],
+                    check=False,
+                    env=env_copy,
+                    stderr=subprocess.PIPE,
+                )
+                if result.returncode != 0:
+                    self.LogError(
+                        f"Stunnel start returned error{result.stderr.decode()}"
+                    )
+                    return False
+            except subprocess.CalledProcessError as cpe:
+                self.LogError(f"Stunnel start returned exception {cpe}")
+                return False
+        return True
+
+    def run_stunnel_mount_command(self, port, mount_path):
+        ah = ArgsHandler()
+        ah.parse()
+
+        cmd = ah.get_stunnel_mount_cmd_line(
+            port, str(LOOPBACK_ADDRESS) + ":" + mount_path
+        )
+        self.LogDebug(f"Attempting mount of {mount_path} on the local host")
+        out = self.RunCmd(cmd, "Mount using stunnel ", ret_out=True)
+        if not out or out.is_error():
+            # Removes conf file as well.
+            self.kill_stunnel_pid(mount_path)
+            st = StunnelConfigGet()
+            st.open_with_remote_path(mount_path)
+            if st.is_found():
+                os.remove(st.get_config_file())
+
+            if (
+                out
+                and isinstance(out.stderr, str)
+                and "timed out" in out.stderr.lower()
+            ):
+                self.LogError(
+                    f"Mount command timed out. Kill stunnel process and retry mount",
+                    code=SysApp.ERR_MOUNT + out.returncode,
+                )
+            # we pass back the mount command exit code
+            exit_code = SysApp.ERR_MOUNT + out.returncode if out else SysApp.ERR_MOUNT
+            self.LogError("mount command on localhost returned error", code=exit_code)
+            return False
+        return True
 
     def mount(self, args):
         if not self.is_share_mounted(args.ip_address, args.mount_path):
@@ -109,8 +302,15 @@ class MountIbmshare(MountHelperBase):
         self.unlock()
         out = self.RunCmd(args.get_mount_cmd_line(), "MountCmd", ret_out=True)
         if not out or out.is_error():
-            if out and isinstance(out.stderr, str) and "timed out" in out.stderr.lower():
-                self.LogError("Mount command timed out. Try to restart StrongSwan service.", code=SysApp.ERR_MOUNT + out.returncode)
+            if (
+                out
+                and isinstance(out.stderr, str)
+                and "timed out" in out.stderr.lower()
+            ):
+                self.LogError(
+                    "Mount command timed out. Try to restart StrongSwan service.",
+                    code=SysApp.ERR_MOUNT + out.returncode,
+                )
             # we pass back the mount command exit code
             exit_code = SysApp.ERR_MOUNT + out.returncode if out else SysApp.ERR_MOUNT
             return self.LogError("Share mount failed.", code=exit_code)
@@ -132,12 +332,21 @@ class MountIbmshare(MountHelperBase):
 
     def run(self):
         if not SysApp.is_root():
-            return self.LogError("Run the mount as super user.", code=SysApp.ERR_NOT_SUPER_USER)
+            return self.LogError(
+                "Run the mount as super user.", code=SysApp.ERR_NOT_SUPER_USER
+            )
 
         ret = False
         try:
             ArgsHandler.set_logging_level()
-            self.set_installed_ipsec()
+            stunnel_requested = ArgsHandler.is_request_stunnel()
+
+            if stunnel_requested:
+                self.lock()
+                self.set_installed_stunnel()
+                self.unlock()
+            else:
+                self.set_installed_ipsec()
 
             rt = ArgsHandler.get_app_run_type()
             if rt.is_setup():
@@ -151,10 +360,19 @@ class MountIbmshare(MountHelperBase):
                 args = ArgsHandler.get_mount_args()
                 if args:
                     self.lock()
-                    ret = self.mount(args)
+                    if stunnel_requested:
+                        self.cleanup_stale_conf()
+                        ret = self.process_stunnel_mount(args)
+                        if not ret:
+                            self.LogError("Stunnel mount failed")
+                        else:
+                            self.LogDebug("Stunnel mount was successful")
+                    else:
+                        ret = self.mount(args)
                     self.unlock()
         except Exception as ex:
             self.LogException("AppRun", ex)
+            traceback.print_exc()
             self.unlock()
         return ret
 
@@ -165,5 +383,5 @@ def main():
     SysApp.exit(ret)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
