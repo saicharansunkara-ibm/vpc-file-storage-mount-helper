@@ -27,7 +27,7 @@ DOWNLOADED_RHEL_PACKAGE_PATH="packages/rhel/$VERSION"
 
 #              Name              Min Version    Install
 LINUX_UBUNTU=("Ubuntu"           "18"           "$APT")
-LINUX_DEBIAN=("Debian GNU/Linux" "10"           "$APT")
+LINUX_DEBIAN=("Debian GNU/Linux" "11"           "$APT")
 LINUX_CENTOS=("CentOS Linux"     "7"            "$YUM")
 LINUX_ROCKY=("Rocky Linux"       "8"            "$YUM")
 LINUX_FEDORA=("Fedora Linux"     $NA            $NA)
@@ -158,7 +158,7 @@ _remove_apps() {
             app="mount.ibmshare"
         fi
 
-        if is_linux LINUX_UBUNTU; then
+        if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
             # Skip uninstallation in case /etc/pre_installed_packages.txt is missing in system
             if [ ! -f "$INSTALLED_PACKAGE_LIST" ]; then
                 log "Skipping uninstallation of packages as file '$INSTALLED_PACKAGE_LIST' is missing..."
@@ -308,7 +308,7 @@ _install_app() {
 _install_apps() { 
     apps=($@)
 
-    if is_linux LINUX_UBUNTU && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
+    if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ) && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
         dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
     elif is_linux LINUX_RED_HAT && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
@@ -336,6 +336,20 @@ _install_apps() {
             fi
             PACKAGE_DIR="packages/ubuntu/$VERSION"
             dpkg --force-all -i "$PACKAGE_DIR/$app"*
+        elif is_linux LINUX_DEBIAN ; then
+            # Read preInstalled packages from system
+            if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
+                log "Skipping package $app for installation as it is pre-installed on the system"
+                continue 
+            fi
+            log "Installing package $app"
+            if [[ $app == "mount.ibmshare"* || $app == *"python"* ]]; then
+                dpkg --force-all -i "$app"
+                continue
+            else
+                sudo apt-get update
+                sudo apt-get install --allow-unauthenticated "$app"
+            fi
         elif  is_linux LINUX_RED_HAT && ([[ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]]); then
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
@@ -400,7 +414,7 @@ check_python3_installed () {
 
     if is_linux LINUX_RED_HAT; then
         PYTHON3_PACKAGE=packages/rhel/$VERSION/python*.rpm
-    elif is_linux LINUX_UBUNTU; then
+    elif ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
         PYTHON3_PACKAGE=packages/ubuntu/$VERSION/python*.deb
     else
         PYTHON3_PACKAGE=$1
@@ -541,8 +555,33 @@ fi;
 
 if is_linux LINUX_DEBIAN; then
     export DEBIAN_FRONTEND=noninteractive
+
+    #debian by default does not have /etc/hosts defined
+    if [ ! -f /etc/hosts ]; then
+    HOSTNAME=$(hostname)
+    echo "127.0.0.1   $HOSTNAME localhost" > /etc/hosts
+    echo "::1         localhost ip6-localhost ip6-loopback" >> /etc/hosts
+    echo "127.0.1.1   $HOSTNAME" >> /etc/hosts
+    echo "/etc/hosts created with hostname: $HOSTNAME"
+    fi
+
     check_python3_installed 
-    install_apps strongswan-starter strongswan-swanctl nfs-common mount.ibmshare*.deb
+    # Define the path to the package list file based on the Debian version
+    PACKAGE_LIST_PATH="packages/debian/package_list"
+
+    # Check if the package list file exists
+    if [ ! -f "$PACKAGE_LIST_PATH" ]; then
+        exit_err "Package list file '$PACKAGE_LIST_PATH' does not exist"
+    fi
+
+    # Read the package list from the file
+    packages=()
+    while IFS= read -r line; do
+        packages+=("$line")
+    done < "$PACKAGE_LIST_PATH"
+
+    # Install the packages in the defined order
+    install_apps "${packages[@]}" mount.ibmshare*.deb
     setup_strongswan_restart_service
     init_mount_helper
 fi;

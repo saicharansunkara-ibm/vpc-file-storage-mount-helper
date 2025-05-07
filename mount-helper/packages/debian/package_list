@@ -1,0 +1,13 @@
+libtirpc-common
+libtirpc3
+libnfsidmap2
+rpcbind
+libstrongswan
+libstrongswan-standard-plugins
+strongswan-libcharon
+strongswan-swanctl
+charon-systemd
+strongswan
+nfs-common
+apt-utils
+watchdog
