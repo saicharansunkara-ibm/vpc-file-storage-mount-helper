@@ -145,7 +145,6 @@ set_install_app() {
     echo "Using install app: $INSTALL_APP" 
 }
 
-
 _remove_apps() { 
     apps=($@)
     $SBIN_SCRIPT -TEARDOWN_APP
@@ -286,7 +285,7 @@ _install_app() {
         if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
             eval "yum install -y $PACKAGE_NAME --nogpgcheck"
         elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
-            eval "apt-get --allow-unauthenticated install $PACKAGE_NAME"
+            eval "apt-get --allow-unauthenticated -y install $PACKAGE_NAME"
         elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
             eval "zypper --no-gpg-checks install -y $PACKAGE_NAME"
         fi
@@ -311,8 +310,10 @@ _install_apps() {
     if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ) && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
         dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
+
     elif is_linux LINUX_RED_HAT && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         rpm -qa --queryformat '%{NAME}\n' > $INSTALLED_PACKAGE_LIST
+
     fi
 
     for app in "${apps[@]}"; do 
@@ -343,12 +344,16 @@ _install_apps() {
                 continue 
             fi
             log "Installing package $app"
+            if [[ $app == *"nfs-common"* ]]; then
+                _install_app "$app"
+                sudo systemctl enable --now nfs-client.target
+                continue
+            fi
             if [[ $app == "mount.ibmshare"* || $app == *"python"* ]]; then
                 dpkg --force-all -i "$app"
                 continue
             else
-                sudo apt-get update
-                sudo apt-get install --allow-unauthenticated "$app"
+                _install_app "$app"
             fi
         elif  is_linux LINUX_RED_HAT && ([[ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]]); then
             # Read preInstalled packages from system
@@ -528,13 +533,25 @@ init_mount_helper () {
     exit_ok "Install completed ok"
 }
 
-if is_linux LINUX_UBUNTU; then
+if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
     export DEBIAN_FRONTEND=noninteractive
     check_python3_installed 
     apt-get -y remove needrestart
 
-    # Define the path to the package list file based on the Ubuntu version
-    PACKAGE_LIST_PATH="packages/ubuntu/$VERSION/package_list"
+    # Define the path to the package list file based on the Ubuntu version or debian
+    if is_linux  LINUX_DEBIAN ; then
+        #debian by default does not have /etc/hosts defined
+        if [ ! -f /etc/hosts ]; then
+            HOSTNAME=$(hostname)
+            echo "127.0.0.1   $HOSTNAME localhost" > /etc/hosts
+            echo "::1         localhost ip6-localhost ip6-loopback" >> /etc/hosts
+            echo "127.0.1.1   $HOSTNAME" >> /etc/hosts
+            echo "/etc/hosts created with hostname: $HOSTNAME"
+        fi
+        PACKAGE_LIST_PATH="packages/debian/package_list"
+    else
+        PACKAGE_LIST_PATH="packages/ubuntu/$VERSION/package_list"
+    fi 
 
     # Check if the package list file exists
     if [ ! -f "$PACKAGE_LIST_PATH" ]; then
@@ -552,40 +569,6 @@ if is_linux LINUX_UBUNTU; then
     setup_strongswan_restart_service
     init_mount_helper
 fi;
-
-if is_linux LINUX_DEBIAN; then
-    export DEBIAN_FRONTEND=noninteractive
-
-    #debian by default does not have /etc/hosts defined
-    if [ ! -f /etc/hosts ]; then
-    HOSTNAME=$(hostname)
-    echo "127.0.0.1   $HOSTNAME localhost" > /etc/hosts
-    echo "::1         localhost ip6-localhost ip6-loopback" >> /etc/hosts
-    echo "127.0.1.1   $HOSTNAME" >> /etc/hosts
-    echo "/etc/hosts created with hostname: $HOSTNAME"
-    fi
-
-    check_python3_installed 
-    # Define the path to the package list file based on the Debian version
-    PACKAGE_LIST_PATH="packages/debian/package_list"
-
-    # Check if the package list file exists
-    if [ ! -f "$PACKAGE_LIST_PATH" ]; then
-        exit_err "Package list file '$PACKAGE_LIST_PATH' does not exist"
-    fi
-
-    # Read the package list from the file
-    packages=()
-    while IFS= read -r line; do
-        packages+=("$line")
-    done < "$PACKAGE_LIST_PATH"
-
-    # Install the packages in the defined order
-    install_apps "${packages[@]}" mount.ibmshare*.deb
-    setup_strongswan_restart_service
-    init_mount_helper
-fi;
-
 
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
