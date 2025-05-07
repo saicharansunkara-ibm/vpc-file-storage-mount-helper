@@ -152,8 +152,8 @@ class ArgsHandler(MountHelperBase):
     def get_mount_options(self, opts_in):
         is_secure = False
         is_tls = False
-        is_ipsec = False
         is_stunnel = False
+        eit_counter = 0
         options = opts_in.split(",")
         o_options = []
         for option in options:
@@ -161,40 +161,24 @@ class ArgsHandler(MountHelperBase):
                 if MOUNT_OPTION_TLS == option.lower():
                     if self.tls_on_version() == True:
                         is_tls = True
+                        eit_counter += 1
+                        error_selection = str(eit_counter) + ") " + MOUNT_OPTION_TLS
                     else:
                         sys.exit(0)
                 elif MOUNT_OPTION_IPSEC == option.lower():
-                    is_ipsec = True
                     is_secure = True
+                    eit_counter += 1
+                    error_selection += " " + str(eit_counter) + ") " + MOUNT_OPTION_IPSEC          
                 elif MOUNT_OPTION_STUNNEL == option.lower():
                     is_stunnel = True
                     is_secure = True
+                    eit_counter += 1
+                    error_selection += " " + str(eit_counter) + ") " + MOUNT_OPTION_STUNNEL
                 else:
                     o_options.append(option)
             elif SECURE_ARG in option.lower().split("="):
                 is_secure = True
-
-        eit_counter = 0
-        if is_tls:
-            eit_counter += 1
-
-        if is_ipsec:
-            eit_counter += 1
-
-        if is_stunnel:
-            eit_counter += 1
-
         if eit_counter > 1:
-            counter = 1
-            error_selection = ""
-            if is_tls:
-                error_selection = str(counter) + ") " + MOUNT_OPTION_TLS
-                counter += 1
-            if is_ipsec:
-                error_selection += " " + str(counter) + ") " + MOUNT_OPTION_IPSEC
-                counter += 1
-            if is_stunnel:
-                error_selection += " " + str(counter) + ") " + MOUNT_OPTION_STUNNEL
             self.LogError("Choose only one of the folowing " + error_selection)
             sys.exit(0)
         elif is_tls:
