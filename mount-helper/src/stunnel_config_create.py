@@ -64,10 +64,6 @@ class StunnelConfigCreate:
             "\n"
             "verifyChain = yes"
             "\n"
-            f"cert = {StunnelConfigGet.TLS_CERT_NAME}"
-            "\n"
-            f"key = {StunnelConfigGet.TLS_KEY_NAME}"
-            "\n"
             f"cafile = {StunnelConfigGet.TLS_CA_NAME}"
             "\n"
         )

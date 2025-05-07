@@ -155,6 +155,7 @@ class ArgsHandler(MountHelperBase):
         is_stunnel = False
         eit_counter = 0
         options = opts_in.split(",")
+        error_selection = ""
         o_options = []
         for option in options:
             if not SECURE_OPTION in option.lower():
@@ -162,7 +163,7 @@ class ArgsHandler(MountHelperBase):
                     if self.tls_on_version() == True:
                         is_tls = True
                         eit_counter += 1
-                        error_selection = str(eit_counter) + ") " + MOUNT_OPTION_TLS
+                        error_selection += str(eit_counter) + ") " + MOUNT_OPTION_TLS
                     else:
                         sys.exit(0)
                 elif MOUNT_OPTION_IPSEC == option.lower():
