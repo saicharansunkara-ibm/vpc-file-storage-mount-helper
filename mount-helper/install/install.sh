@@ -27,7 +27,7 @@ DOWNLOADED_RHEL_PACKAGE_PATH="packages/rhel/$VERSION"
 
 #              Name              Min Version    Install
 LINUX_UBUNTU=("Ubuntu"           "18"           "$APT")
-LINUX_DEBIAN=("Debian GNU/Linux" "10"           "$APT")
+LINUX_DEBIAN=("Debian GNU/Linux" "11"           "$APT")
 LINUX_CENTOS=("CentOS Linux"     "7"            "$YUM")
 LINUX_ROCKY=("Rocky Linux"       "8"            "$YUM")
 LINUX_FEDORA=("Fedora Linux"     $NA            $NA)
@@ -145,7 +145,6 @@ set_install_app() {
     echo "Using install app: $INSTALL_APP" 
 }
 
-
 _remove_apps() { 
     apps=($@)
     $SBIN_SCRIPT -TEARDOWN_APP
@@ -158,7 +157,7 @@ _remove_apps() {
             app="mount.ibmshare"
         fi
 
-        if is_linux LINUX_UBUNTU; then
+        if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
             # Skip uninstallation in case /etc/pre_installed_packages.txt is missing in system
             if [ ! -f "$INSTALLED_PACKAGE_LIST" ]; then
                 log "Skipping uninstallation of packages as file '$INSTALLED_PACKAGE_LIST' is missing..."
@@ -286,7 +285,7 @@ _install_app() {
         if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
             eval "yum install -y $PACKAGE_NAME --nogpgcheck"
         elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
-            eval "apt-get --allow-unauthenticated install $PACKAGE_NAME"
+            eval "apt-get --allow-unauthenticated -y install $PACKAGE_NAME"
         elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
             eval "zypper --no-gpg-checks install -y $PACKAGE_NAME"
         fi
@@ -308,11 +307,13 @@ _install_app() {
 _install_apps() { 
     apps=($@)
 
-    if is_linux LINUX_UBUNTU && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
+    if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ) && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
         dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
+
     elif is_linux LINUX_RED_HAT && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         rpm -qa --queryformat '%{NAME}\n' > $INSTALLED_PACKAGE_LIST
+
     fi
 
     for app in "${apps[@]}"; do 
@@ -336,6 +337,24 @@ _install_apps() {
             fi
             PACKAGE_DIR="packages/ubuntu/$VERSION"
             dpkg --force-all -i "$PACKAGE_DIR/$app"*
+        elif is_linux LINUX_DEBIAN ; then
+            # Read preInstalled packages from system
+            if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
+                log "Skipping package $app for installation as it is pre-installed on the system"
+                continue 
+            fi
+            log "Installing package $app"
+            if [[ $app == *"nfs-common"* ]]; then
+                _install_app "$app"
+                sudo systemctl enable --now nfs-client.target
+                continue
+            fi
+            if [[ $app == "mount.ibmshare"* || $app == *"python"* ]]; then
+                dpkg --force-all -i "$app"
+                continue
+            else
+                _install_app "$app"
+            fi
         elif  is_linux LINUX_RED_HAT && ([[ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]]); then
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
@@ -400,7 +419,7 @@ check_python3_installed () {
 
     if is_linux LINUX_RED_HAT; then
         PYTHON3_PACKAGE=packages/rhel/$VERSION/python*.rpm
-    elif is_linux LINUX_UBUNTU; then
+    elif ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
         PYTHON3_PACKAGE=packages/ubuntu/$VERSION/python*.deb
     else
         PYTHON3_PACKAGE=$1
@@ -514,13 +533,25 @@ init_mount_helper () {
     exit_ok "Install completed ok"
 }
 
-if is_linux LINUX_UBUNTU; then
+if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
     export DEBIAN_FRONTEND=noninteractive
     check_python3_installed 
     apt-get -y remove needrestart
 
-    # Define the path to the package list file based on the Ubuntu version
-    PACKAGE_LIST_PATH="packages/ubuntu/$VERSION/package_list"
+    # Define the path to the package list file based on the Ubuntu version or debian
+    if is_linux  LINUX_DEBIAN ; then
+        #debian by default does not have /etc/hosts defined
+        if [ ! -f /etc/hosts ]; then
+            HOSTNAME=$(hostname)
+            echo "127.0.0.1   $HOSTNAME localhost" > /etc/hosts
+            echo "::1         localhost ip6-localhost ip6-loopback" >> /etc/hosts
+            echo "127.0.1.1   $HOSTNAME" >> /etc/hosts
+            echo "/etc/hosts created with hostname: $HOSTNAME"
+        fi
+        PACKAGE_LIST_PATH="packages/debian/package_list"
+    else
+        PACKAGE_LIST_PATH="packages/ubuntu/$VERSION/package_list"
+    fi 
 
     # Check if the package list file exists
     if [ ! -f "$PACKAGE_LIST_PATH" ]; then
@@ -538,15 +569,6 @@ if is_linux LINUX_UBUNTU; then
     setup_strongswan_restart_service
     init_mount_helper
 fi;
-
-if is_linux LINUX_DEBIAN; then
-    export DEBIAN_FRONTEND=noninteractive
-    check_python3_installed 
-    install_apps strongswan-starter strongswan-swanctl nfs-common mount.ibmshare*.deb
-    setup_strongswan_restart_service
-    init_mount_helper
-fi;
-
 
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
