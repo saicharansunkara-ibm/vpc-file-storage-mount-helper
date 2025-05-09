@@ -61,8 +61,8 @@ class TestMountIbmshareOther(unittest.TestCase):
 
     def test_load_mounted_shares_returns_error(self):
         mo, ret = do_already_mounted(ret=-99)
-        self.assertTrue(ret)
-        self.assertIsNone(mo.mounts)
+        self.assertFalse(ret)
+        self.assertEqual(mo.mounts, [])
 
     def test_is_share_mounted(self):
         data = "1.1.1.1:already_mounted unknown mounted_at ccc nfs"
