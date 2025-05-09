@@ -28,7 +28,7 @@ DOWNLOADED_RHEL_PACKAGE_PATH="packages/rhel/$VERSION"
 #              Name              Min Version    Install
 LINUX_UBUNTU=("Ubuntu"           "18"           "$APT")
 LINUX_DEBIAN=("Debian GNU/Linux" "11"           "$APT")
-LINUX_CENTOS=("CentOS Linux"     "7"            "$YUM")
+LINUX_CENTOS=("CentOS Stream"     "9"            "$YUM")
 LINUX_ROCKY=("Rocky Linux"       "8"            "$YUM")
 LINUX_FEDORA=("Fedora Linux"     $NA            $NA)
 LINUX_SUSE=("SLES"               "12"           "$ZYP")
@@ -169,7 +169,7 @@ _remove_apps() {
                 continue 2
             fi
             apt-get purge -y --no-auto-remove "$app"
-        elif is_linux LINUX_RED_HAT; then
+        elif ( is_linux LINUX_RED_HAT || is_linux LINUX_CENTOS ); then
             if [ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]; then
                 # Skip uninstallation in case /etc/pre_installed_packages.txt is missing in system
                 if [ ! -f "$INSTALLED_PACKAGE_LIST" ]; then
@@ -199,7 +199,7 @@ _remove_apps() {
 
 extract_version() {
     ver=$1
-    python3 -c "import re; m=re.findall('[0-9]+\.[0-9]+\.?[0-9]*', '$ver'); print(m[0] if len(m)>0 else '' )"
+    python3 -c "import re; m=re.findall(r'[0-9]+\.[0-9]+\.?[0-9]*', '$ver'); print(m[0] if len(m)>0 else '' )"
 
 }
 
@@ -311,7 +311,7 @@ _install_apps() {
         # Storing all the packages which come by default on the system. This will be used in uninstalltion case.
         dpkg -l | grep '^ii' | awk '{print $2}' > $INSTALLED_PACKAGE_LIST
 
-    elif is_linux LINUX_RED_HAT && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
+    elif ( is_linux LINUX_RED_HAT || is_linux LINUX_CENTOS ) && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
         rpm -qa --queryformat '%{NAME}\n' > $INSTALLED_PACKAGE_LIST
 
     fi
@@ -376,6 +376,26 @@ _install_apps() {
             fi
             PACKAGE_DIR="packages/rhel/$VERSION"
             rpm -i "$PACKAGE_DIR/$app"* --force --nodeps
+        elif  is_linux LINUX_CENTOS ; then
+            # Read preInstalled packages from system
+            if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
+                log "Skipping package $app for installation as it is pre-installed on the system"
+                continue 
+            fi
+            log "Installing package $app"
+            if [[ $app == mount.ibmshare* ]]; then
+                if [[ "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--update-stage" ]]; then
+                    rpm -U "$app" --force --nodeps --nodigest --nosignature
+                else
+                    rpm -i "$app" --force --nodeps --nodigest --nosignature
+                fi
+            continue
+            fi
+            if [[ $app == *"python"* ]]; then
+                rpm -i "$app" --force --nodeps
+                continue
+            fi
+            _install_app "$app"
         else
             _install_app "$app" 
         fi
@@ -573,7 +593,7 @@ fi;
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
     if [ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]; then
-        # Define the path to the package list file based on the Ubuntu version
+        # Define the path to the package list file based on the RHEL version
         PACKAGE_LIST_PATH="packages/rhel/$VERSION/package_list"
 
         # Check if the package list file exists
@@ -603,9 +623,28 @@ fi;
 
 if is_linux LINUX_CENTOS; then
     check_python3_installed python3
-    install_apps epel-release strongswan strongswan-sqlite nfs-utils mount.ibmshare*.rpm
+    # Define the path to the package list file for CENTOS_STREAM
+    PACKAGE_LIST_PATH="packages/centos_stream/$VERSION/package_list"
+
+    # Check if the package list file exists
+    if [ ! -f "$PACKAGE_LIST_PATH" ]; then
+        exit_err "Package list file '$PACKAGE_LIST_PATH' does not exist"
+    fi
+
+    # Read the package list from the file
+    packages=()
+    while IFS= read -r line; do
+        packages+=("$line")
+    done < "$PACKAGE_LIST_PATH"
+
+    if [ "$INSTALL_ARG" != "--uninstall" ]; then
+        sudo dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
+    fi
+
+    # Install the packages in the defined order
+    install_apps "${packages[@]}" mount.ibmshare*.rpm
     setup_strongswan_restart_service
-    init_mount_helper
+    init_mount_helper         
 fi;
 
 if is_linux LINUX_ROCKY; then
