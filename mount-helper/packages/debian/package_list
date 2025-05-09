@@ -1,0 +1,15 @@
+libstrongswan
+libnfsidmap2
+strongswan-libcharon
+libcharon-extra-plugins
+strongswan-swanctl
+charon-systemd
+strongswan-starter
+strongswan-charon
+strongswan
+rpcbind
+dialog
+apt-utils
+nfs-common
+nfs-server
+watchdog
