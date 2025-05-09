@@ -4,6 +4,53 @@
 INSTALL="install"
 UNINSTALL="uninstall"
 
+# Temporary: Add a test certificate to /etc/stunnel if stunnel is installed
+# This is a non-production test certificate used only during development.
+# Once certificates signed by a trusted CA are adopted, this will be removed
+# and the trusted CA certs will be preinstalled with the OS.
+create_stunnel_cert_if_installed() {
+    if command -v stunnel >/dev/null 2>&1 && [ -d /etc/stunnel ]; then
+        cat <<EOF > /etc/stunnel/allca.pem
+-----BEGIN CERTIFICATE-----
+MIIFdTCCA12gAwIBAgIUdNDeiuIBYhInN5rrT+FZPmE5vy4wDQYJKoZIhvcNAQEL
+BQAwSjELMAkGA1UEBhMCVVMxDjAMBgNVBAgMBVRleGFzMQ8wDQYDVQQHDAZEYWxs
+YXMxDDAKBgNVBAoMA0lCTTEMMAoGA1UEAwwDSUJNMB4XDTI1MDUwMTE0NDkxNVoX
+DTM1MDQyOTE0NDkxNVowSjELMAkGA1UEBhMCVVMxDjAMBgNVBAgMBVRleGFzMQ8w
+DQYDVQQHDAZEYWxsYXMxDDAKBgNVBAoMA0lCTTEMMAoGA1UEAwwDSUJNMIICIjAN
+BgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA4xgsAao3qQc6btAw2fwue/YK7/qm
+XmLX+F7ATfqJwnDgshGOSii6LBBa9QHLPL59WLHbz/M3YBk4YJ8MTOAZTH48UyS0
+3epYSIpeoE/8wtoGtQoIhhEftNSsPYNixFsDPPyRSR2dvXVJrZZtkwdxrp4M8aAc
+wD3hBqCNI2FFPb8d1/OICCweHevz3BvGzAT8HdDo9j8vjH2BSFqm99cyk5iKMdO9
+p0LCNPN/uLybNScyzB7aeNRQPHaNEMU5JVHtV+sYrDAeanAmHnMbRnQw8QBOIC3N
+jyvB1IAV5Ny884Nb0pZWSWzwXCr3oB6S4YI/O6jQIBhBgG+27R9jWVfgoiS7ezqT
+Grc7/n50PdLEMUqyJ6lijzvearACanObnXi6xJup18DYv7aCLwNQn2I7C3KNs7lr
+DaFLEEl0xjj/u6ruDYCxe70aGJC2g4s36chvu6BoSaSpl2yU9a1XrfNGfxoVcXvZ
+Bwhx+zsWlH3sdIa85lqwvjFg9kh2+JLkAA+7KgINwGeNF8+a05tBbC5N9xOXjOJu
+Ok/CCMJ8chQZoJj1JqrKezUZElTG0qJNqVlKyEzJ3boLTAOT6mGurna3ajR5Zijd
+7Y8m298ecozO3+WnQtLJQY5jMHJBQjG3l8qfaUybeDSllmypDiOHfS9hn7F85sGh
+bupFEHIYP2Y4+UcCAwEAAaNTMFEwHQYDVR0OBBYEFJnWw/hcYcbsRbcSWivW8893
+M9TMMB8GA1UdIwQYMBaAFJnWw/hcYcbsRbcSWivW8893M9TMMA8GA1UdEwEB/wQF
+MAMBAf8wDQYJKoZIhvcNAQELBQADggIBALhVdmERupJERDAxa8tjv9NyPdLmWKvX
+DG4EN9qeuh7lXnTw97tuaAFglXmp//nbqJ1pSUdaTflUnc1bGEiOkRKHfeVEsvbH
+AtvFkLWi7CEg/A6ulJ+RgZynssdZ5D5Y+cLw2JhaiDxNf+yikcnn5q0BXpiZCqA6
+a0ylPmoDKn1pC2c5s95f7yehXBNDxJw+Lxdec8kKKeNk23HcLei/AoKaKzJQK2Q0
+aCFgWdxofvky1h2csCjQN2EJAAp1v0BDBX/GvIkD4dXA9YI8sIeF/ZWv2gxFJNeY
+guqcBWTPNwpKNflmz+TqQOB9rNdGDh0WQAQLLeeccOb16hlr86YbDfrjikQFrfcx
+KIq9Jj15vsIEmLNavIAANjWOGn/8gNTttyHMYitSAecpqX0VY0/Qe3s0fmMhwJgl
+PSEK8nYssZ/7WVpV0RE8qyo0t4M01kl8NXUlWuyZ3vt+Wgz8xYMMvL2b9M7q6ysm
+M76z0t8anU9C7BTX8C7THFHid/LRS/1UlvuJKkQYsUgxac+OFcrw32NiZ5QTJ8Z8
+0iurNNAwqiVuEKwccwv+dO1qXTQDMf7YmeAwv4iSzG/l4M7F/xBTZEY2MeRjrLQl
+62hMSc0o/OkBYCF6O3tXupXJs/5weBNZqcLizEu076XZ4pBhgKXpmJgqfHLRAcwN
+6sIG86suxYkB
+-----END CERTIFICATE-----
+EOF
+        echo "Created /etc/stunnel/allca.pem certificate."
+    else
+        echo "stunnel not installed or /etc/stunnel does not exist; skipping cert creation."
+    fi
+}
+
+
 # Create necessary directories
 setup_stunnel_directories() {
     sudo mkdir -p /var/run/stunnel4/ /etc/stunnel
@@ -17,6 +64,7 @@ install_stunnel_ubuntu_debian() {
     sudo apt-get update
     sudo apt-get install -y stunnel4
     setup_stunnel_directories
+    create_stunnel_cert_if_installed
 
     # Verify installation
     if command -v stunnel > /dev/null; then
@@ -36,6 +84,7 @@ install_stunnel_rhel_centos_rocky() {
     # Install stunnel
     sudo yum install -y stunnel
     setup_stunnel_directories
+    create_stunnel_cert_if_installed
 
     # Verify installation
     if command -v stunnel > /dev/null; then
@@ -52,6 +101,7 @@ install_stunnel_suse() {
     # Install stunnel
     sudo zypper install -y stunnel
     setup_stunnel_directories
+    create_stunnel_cert_if_installed
 
     # Verify installation
     if command -v stunnel > /dev/null; then
