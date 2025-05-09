@@ -622,7 +622,7 @@ class NfsMount(MountHelperBase):
     def load_nfs_mounts(self):
         result = self.RunCmd(NfsMount.MOUNT_LIST_NFS_CMD, "ListNfsMounts")
         if not result:
-            return None
+            return []
 
         lines = result.stdout.splitlines()
         mounts = []

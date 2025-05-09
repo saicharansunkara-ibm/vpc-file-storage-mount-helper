@@ -75,8 +75,6 @@ class MountIbmshare(MountHelperBase):
     # Method to check whether nfs share is already mounted.
     def is_share_mounted(self, ip_address, mount_path):
         self.mounts = NfsMount().load_nfs_mounts()
-        # if self.mounts is None:
-        # return True  # Force app to exit app
         for mount in self.mounts:
             if mount.ip == ip_address and mount.mount_path == mount_path:
                 self.LogUser("Found a mount at: " + mount.mounted_at)
