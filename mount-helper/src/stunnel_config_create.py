@@ -7,9 +7,12 @@
 import os
 import re
 from datetime import datetime
+from stunnel_config_get import StunnelConfigGet
 
 
 class StunnelConfigCreate:
+    WRITE_ERROR = "The following exception occurred on write to file - "
+
     def __init__(self, accept_ip, accept_port, connect_ip, connect_port, remote_path):
         self.accept_ip = accept_ip
         self.accept_port = accept_port
@@ -20,7 +23,6 @@ class StunnelConfigCreate:
         self.valid = False
         self.error = None
         self.filepath = StunnelConfigGet.get_config_file_from_remote_path(remote_path)
-        self.write_file()
 
     def write_file(self):
 
@@ -72,9 +74,7 @@ class StunnelConfigCreate:
             with open(filepath, "w") as file:
                 file.write(buffer)
         except Exception as e:
-            self.error = (
-                f"an exception on an operation occurred on file {filepath}: {e}"
-            )
+            self.error = f"{StunnelConfigCreate.WRITE_ERROR} '{filepath}': {e}"
             self.valid = False
             return
         self.valid = True

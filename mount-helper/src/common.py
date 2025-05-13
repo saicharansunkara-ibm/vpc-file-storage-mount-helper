@@ -26,8 +26,7 @@ def sleep_msg(secs, msg):
 
 
 def decode(val):
-    _val = val.decode(encoding='UTF-8',
-                      errors='replace') if val else ""
+    _val = val.decode(encoding="UTF-8", errors="replace") if val else ""
     return _val.strip()
 
 
@@ -41,19 +40,21 @@ def make_dirs(fpath, is_file=False):
         path, _ = os.path.split(path)
     if not os.path.exists(path):
         os.makedirs(path)
-        MountHelperLogger().LogDebug("Folder created:"+path)
+        MountHelperLogger().LogDebug("Folder created:" + path)
         return path
     return None
 
 
 def to_utc(dt):
-    return datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, tzinfo=timezone.utc)
+    return datetime(
+        dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, tzinfo=timezone.utc
+    )
 
 
 def utc_format(dt, show_tz=True):
     if not dt:
         dt = get_utc_now()
-    fmt = '%Y-%m-%d %H:%M:%S'
+    fmt = "%Y-%m-%d %H:%M:%S"
     if show_tz:
         fmt += " UTC"
     return dt.strftime(fmt)
@@ -126,8 +127,7 @@ def get_val_from_text(txt, what, all, comments=None):
 
 class TempFile(object):
     def __init__(self, data=None, delete=True):
-        self.tf = tempfile.NamedTemporaryFile(
-            delete=delete, dir=LocalInstall.path())
+        self.tf = tempfile.NamedTemporaryFile(delete=delete, dir=LocalInstall.path())
         self.filename = self.tf.name
         self.data = data
 
@@ -194,20 +194,20 @@ class SysApp:
     ERR_MOUNT = 100  # call to mount nfs4 share fails - mount exit value added
     last_error_code = None
 
-    @ staticmethod
+    @staticmethod
     def set_code(code):
         SysApp.last_error_code = code
         return False
 
-    @ staticmethod
+    @staticmethod
     def is_none():
         return SysApp.last_error_code == None
 
-    @ staticmethod
+    @staticmethod
     def is_code(code):
         return SysApp.last_error_code == code
 
-    @ staticmethod
+    @staticmethod
     def exit(ok):
         if ok:
             sys.exit(0)
@@ -215,7 +215,7 @@ class SysApp:
             code = SysApp.last_error_code
             sys.exit(code if code else SysApp.ERR_APP_GENERIC)
 
-    @ staticmethod
+    @staticmethod
     def argv(pos=None):
         if pos:
             if len(sys.argv) < (pos + 1):
@@ -223,12 +223,12 @@ class SysApp:
             return sys.argv[pos]
         return sys.argv
 
-    @ staticmethod
+    @staticmethod
     def has_arg(arg):
         args = str(SysApp.argv())
         return arg in args
 
-    @ staticmethod
+    @staticmethod
     def is_root():
         return os.geteuid() == 0
 
@@ -247,9 +247,8 @@ class MountHelperLogger:
         if not LocalInstall.exists():
             return None
         handler = logging.handlers.RotatingFileHandler(
-            self.LOG_FILE,
-            maxBytes=self.MAX_SIZE,
-            backupCount=self.MAX_FILES)
+            self.LOG_FILE, maxBytes=self.MAX_SIZE, backupCount=self.MAX_FILES
+        )
         log_file = logging.getLogger()
         log_file.setLevel(logging.INFO)
         log_file.addHandler(handler)
@@ -280,8 +279,7 @@ class MountHelperLogger:
             MountHelperLogger.log_file = self.init_log_file()
 
         if MountHelperLogger.log_file:
-            fmt_msg = "%s %s %s" % (
-                self.log_prefix, utc_format(None, False), msg)
+            fmt_msg = "%s %s %s" % (self.log_prefix, utc_format(None, False), msg)
             self.log_file.log(level, fmt_msg)
 
     def _log(self, level, msg):
@@ -342,13 +340,20 @@ class SubProcess(MountHelperLogger):
 
     def show_output(self):
         msg = "Cmd: %s\nRetCode: %d\nStdError: %s\nStdOut: %s\n" % (
-            self.cmd, self.returncode, self.stderr, self.stdout)
+            self.cmd,
+            self.returncode,
+            self.stderr,
+            self.stdout,
+        )
         print(msg)
 
     def get_error(self):
         if self.is_error():
             msg = "RunCmd Failed: ExitCode(%d) StdError(%s) Cmd(%s)" % (
-                self.returncode, self.stderr, self.cmd_to_str())
+                self.returncode,
+                self.stderr,
+                self.cmd_to_str(),
+            )
             return msg.replace("StdError() ", "")
         return None
 
@@ -356,7 +361,7 @@ class SubProcess(MountHelperLogger):
         return self.returncode != 0
 
     def cmd_to_str(self):
-        return ' '.join(self.cmd)
+        return " ".join(self.cmd)
 
     def get_stdout_val(self, what, all=False):
         return get_val_from_text(self.stdout, what, all)
@@ -368,14 +373,15 @@ class SubProcess(MountHelperLogger):
         try:
             self.LogDebug("Stream: " + self.cmd_to_str())
             with subprocess.Popen(
-                    # self.cmd_to_str(),
-                    self.cmd,
-                    # shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE) as proc:
+                # self.cmd_to_str(),
+                self.cmd,
+                # shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            ) as proc:
                 self.LogDebug("Waiting for ouput......")
 
-                for line in iter(proc.stdout.readline, b''):
+                for line in iter(proc.stdout.readline, b""):
                     if line:
                         txt = line.decode().strip("\r\n") + "\n"
                         sys.stdout.write(txt)
@@ -388,12 +394,12 @@ class SubProcess(MountHelperLogger):
     def run(self):
         if sys.version_info[:2] < (3, 5):
             proc = subprocess.Popen(
-                self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             (stdout, stderr) = proc.communicate()
             return self.set_output(proc.returncode, stdout, stderr)
 
-        out = subprocess.run(self.cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        out = subprocess.run(self.cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return self.set_output(out.returncode, out.stdout, out.stderr)
 
 
@@ -423,7 +429,7 @@ class MountHelperBase(MountHelperLogger):
                 shutil.copyfile(src, dst)
                 return True
             except Exception as ex:
-                self.LogException('CopyFile:', ex)
+                self.LogException("CopyFile:", ex)
 
         return False
 
@@ -431,7 +437,7 @@ class MountHelperBase(MountHelperLogger):
         if os.path.exists(dpath):
             files = get_files_in_folder(dpath, filter)
             if len(files) > 0:
-                self.LogDebug("Cleanup folder:"+dpath)
+                self.LogDebug("Cleanup folder:" + dpath)
                 for file in files:
                     os.remove(file)
             if remove_empty and not os.listdir(dpath):
@@ -451,7 +457,7 @@ class MountHelperBase(MountHelperLogger):
             with open(fpath, "r") as fp:
                 return fp.read()
         except Exception as ex:
-            self.LogException('ReadFile:', ex, fpath)
+            self.LogException("ReadFile:", ex, fpath)
         return None
 
     def WriteFile(self, fpath, data, mkdir=False, chmod=None):
@@ -466,7 +472,7 @@ class MountHelperBase(MountHelperLogger):
                 os.chmod(fpath, chmod)
 
         except Exception as ex:
-            self.LogException('WriteFile:', ex, fpath)
+            self.LogException("WriteFile:", ex, fpath)
             return False
 
         return True
@@ -495,20 +501,20 @@ class MountHelperBase(MountHelperLogger):
                 if ret_out:
                     return output
             else:
-                #self.LogDebug("Successfully executed:"+descr)
+                # self.LogDebug("Successfully executed:"+descr)
                 return output
 
         except KeyboardInterrupt:
             self.LogError("Keyboard Interrupt caught")
         except Exception as ex:
-            self.LogException('RunCmd:', ex, descr)
+            self.LogException("RunCmd:", ex, descr)
 
         return None
 
 
 class SystemCtl(MountHelperBase):
     EXE_PATH = "/bin/systemctl"
-    OS_PATH= "/etc/os-release"
+    OS_PATH = "/etc/os-release"
     SYSTEMD_VERSION_SUPPORTS_UTC = 228
 
     def __init__(self, name):
@@ -544,8 +550,8 @@ class SystemCtl(MountHelperBase):
             out.show_output()
 
     def is_active(self):
-        out = self.action('is-active', silent=True)
-        return out.stdout == 'active' if out else False
+        out = self.action("is-active", silent=True)
+        return out.stdout == "active" if out else False
 
     def systemd_supports_utc(self):
         return self.systemd_version() >= self.SYSTEMD_VERSION_SUPPORTS_UTC
@@ -553,46 +559,48 @@ class SystemCtl(MountHelperBase):
     def systemd_version(self):
         version = get_app_version(self.EXE_PATH, "systemd")
         return to_int(version) if version else 0
-    
+
     def get_os_version(self):
         if self.FileExists(self.OS_PATH):
-            content = self.ReadFile(self.OS_PATH, log=False) 
+            content = self.ReadFile(self.OS_PATH, log=False)
             match = re.search(r'^VERSION_ID="([^"]+)"', content, re.MULTILINE)
             return match.group(1)
-        
+
     def get_os_name(self):
         if self.FileExists(self.OS_PATH):
-            content = self.ReadFile(self.OS_PATH, log=False) 
+            content = self.ReadFile(self.OS_PATH, log=False)
             match = re.search(r'^NAME="([^"]*)"', content, re.MULTILINE)
             return match.group(1)
-        
+
     def is_kernel_version_6_or_higher(self):
-        result = subprocess.run(['uname', '-r'], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["uname", "-r"], capture_output=True, text=True, check=True
+        )
         version = result.stdout.strip()
-        major_version = int(version.split('.')[0])
+        major_version = int(version.split(".")[0])
         return major_version >= 6
-    
+
     def check_tls_enabled_os(self, os_list):
-        os_name= self.get_os_name()
-        os_version= self.get_os_version()
+        os_name = self.get_os_name()
+        os_version = self.get_os_version()
         enabled = f"{os_name} {os_version}"
-        
-        return enabled in os_list 
-    
-    def tls_package_installed(self,package_name):
-        os_name= self.get_os_name()
-        if os_name == 'Ubuntu':
+
+        return enabled in os_list
+
+    def tls_package_installed(self, package_name):
+        os_name = self.get_os_name()
+        if os_name == "Ubuntu":
             # For Ubuntu and Debian-based systems
-            command = ['dpkg', '-l']
+            command = ["dpkg", "-l"]
             output = subprocess.check_output(command).decode()
-            return package_name in output  
-        elif os_name in ['Red Hat Enterprise Linux','Rocky Linux']:
+            return package_name in output
+        elif os_name in ["Red Hat Enterprise Linux", "Rocky Linux"]:
             # For RHEL, CentOS, and Rocky Linux
-            command = ['rpm', '-qa']
+            command = ["rpm", "-qa"]
             output = subprocess.check_output(command).decode().strip()
             return package_name in output
-        return 'not installed' not in output
-    
+        return "not installed" not in output
+
     def action(self, action, arg=None, silent=False):
         cmd = [self.EXE_PATH, action]
         if arg:
@@ -605,8 +613,8 @@ class SystemCtl(MountHelperBase):
 
 class NfsMount(MountHelperBase):
     MOUNT_OUTPUT_FIELDS_SIZE = 5
-    MOUNT_TYPE_NFS = 'nfs'
-    MOUNT_TYPE_NFS4 = 'nfs4'
+    MOUNT_TYPE_NFS = "nfs"
+    MOUNT_TYPE_NFS4 = "nfs4"
     NFS_PATH_INDEX = 0
     MOUNTED_AT = 2
     HOST_INDEX = 0
@@ -638,14 +646,18 @@ class NfsMount(MountHelperBase):
     def get_nfs_mount(self, line):
         mount_fields = line.split(" ")
         if len(mount_fields) >= NfsMount.MOUNT_OUTPUT_FIELDS_SIZE:
-            if NfsMount.MOUNT_TYPE_NFS in mount_fields or NfsMount.MOUNT_TYPE_NFS4 in mount_fields:
+            if (
+                NfsMount.MOUNT_TYPE_NFS in mount_fields
+                or NfsMount.MOUNT_TYPE_NFS4 in mount_fields
+            ):
                 ip, mount_path = NfsMount.extract_source(
-                    mount_fields[NfsMount.NFS_PATH_INDEX])
+                    mount_fields[NfsMount.NFS_PATH_INDEX]
+                )
                 if ip and mount_path:
                     return NfsMount(ip, mount_path, mount_fields[NfsMount.MOUNTED_AT])
         return None
 
-    @ staticmethod
+    @staticmethod
     def extract_source(src):
         if len(src) > 0:
             host_path = src.split(":")
@@ -687,8 +699,10 @@ def version_compare(version1, version2):
         return (a > b) - (a < b)
 
     def fix(v):
-        return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
+        return [int(x) for x in re.sub(r"(\.0+)*$", "", v).split(".")]
+
     return cmp(fix(version1), fix(version2))
+
 
 class ConfigEditor(MountHelperBase):
     def __init__(self, fname):
@@ -739,6 +753,7 @@ class RootCert(object):
     def sort(files):
         def get_key(o):
             return o.region
+
         files.sort(key=get_key)
 
 
@@ -746,8 +761,7 @@ class ShareConfig(ConfigEditor):
     conf_path = "/etc/ibmcloud"
 
     def __init__(self, path, cert_path=".", show_error=True):
-        self.name = make_filename(
-            path if path else self.conf_path, "share.conf")
+        self.name = make_filename(path if path else self.conf_path, "share.conf")
         self.data = ""
         self.cert_path = cert_path
         self.show_error = show_error
@@ -756,13 +770,15 @@ class ShareConfig(ConfigEditor):
         pfx = "type_ibmshare_root_"
         files = get_files_in_folder(self.cert_path, pfx + "*.*")
         if len(files) == 0:
-            return self.LogError("Ensure root CA certs are present in: " + self.cert_path)
+            return self.LogError(
+                "Ensure root CA certs are present in: " + self.cert_path
+            )
 
         regions = []
         for file in files:
             start = file.find(pfx)
             start += len(pfx)
-            stop = file.rfind('.')
+            stop = file.rfind(".")
             assert start > 0 and stop > start
             region = file[start:stop]
             region = RootCert(region.lower(), file)
@@ -771,7 +787,7 @@ class ShareConfig(ConfigEditor):
         return regions
 
     def create(self):
-        self.LogInfo("Generate config file: "+self.name)
+        self.LogInfo("Generate config file: " + self.name)
         files = self.load_files()
         if not files:
             return False
@@ -818,7 +834,9 @@ class ShareConfig(ConfigEditor):
             return self.error("No regions found in:")
 
         if (len(regions) > 1) and ("all" in regions):
-            return self.error("Only one region entry allowed if using 'all': " + str(regions))
+            return self.error(
+                "Only one region entry allowed if using 'all': " + str(regions)
+            )
         return regions
 
     def get_files_for_regions(self, regions):

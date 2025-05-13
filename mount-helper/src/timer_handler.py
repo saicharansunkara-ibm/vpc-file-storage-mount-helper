@@ -10,8 +10,8 @@ from datetime import timedelta
 
 
 class TimerHandler(SystemCtl):
-    TIMER_FILE = '/etc/systemd/system/mount_helper.timer'
-    SERVICE_FILE = '/etc/systemd/system/mount_helper.service'
+    TIMER_FILE = "/etc/systemd/system/mount_helper.timer"
+    SERVICE_FILE = "/etc/systemd/system/mount_helper.service"
 
     TIMER_CONFIG = """[Unit]
 Description=Mount helper timer
@@ -33,7 +33,7 @@ WantedBy=multi-user.target
 """
 
     def __init__(self):
-        super().__init__('mount_helper.timer')
+        super().__init__("mount_helper.timer")
 
     def schedule_certs_renewal(self, date, command_path, min_future_secs=10):
         # schedule date must be in the future

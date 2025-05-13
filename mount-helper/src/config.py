@@ -74,7 +74,7 @@ class IpsecConfigBase(MountHelperBase):
     def remove_config(self, ip):
         fname = self.get_config(ip)
         if fname:
-            self.LogDebug("Removing unused config file: "+fname)
+            self.LogDebug("Removing unused config file: " + fname)
             self.RemoveFile(fname)
             self.is_reload = True
 
@@ -112,12 +112,11 @@ class IpsecConfigBase(MountHelperBase):
                 self.is_reload = True
                 return True
         except Exception as ex:
-            self.LogException("CreateConfig"+self.NAME, ex)
+            self.LogException("CreateConfig" + self.NAME, ex)
         return False
 
     # Remove any unused config files
-    def cleanup_unused_configs(self, mounts,
-                               age=None):
+    def cleanup_unused_configs(self, mounts, age=None):
         if mounts is None:
             mounts = NfsMount().load_nfs_mounts()
 
@@ -172,7 +171,12 @@ class IpsecConfigBase(MountHelperBase):
                     inc_cnt(3)
 
         msg = "%s cleanup config files Total(%s) Mounted(%d) Deleted(%d) Recent(%d)" % (
-            self.NAME, cnts[0], cnts[1], cnts[2], cnts[3])
+            self.NAME,
+            cnts[0],
+            cnts[1],
+            cnts[2],
+            cnts[3],
+        )
         self.LogDebug(msg)
         hasActiveMounts = cnts[1] != 0 or cnts[3] != 0
         return hasActiveMounts
@@ -213,7 +217,7 @@ class IpsecConfigBase(MountHelperBase):
         self.IPSEC_CONFIG_PATH = path
         return True
 
-    def remove_all_certs(self,root=False):
+    def remove_all_certs(self, root=False):
         self.CleanupDir(self.ROOT_CA_PATH)
         if root:
             return
@@ -265,11 +269,11 @@ class StrongSwanConfig(IpsecConfigBase):
     VERSION_TAG = "swanctl"
     EXE_PATH = "/usr/sbin/swanctl"
     CONFIG_PATH = config_path()
-    ROOT_CA_PATH = CONFIG_PATH + '/x509ca'
+    ROOT_CA_PATH = CONFIG_PATH + "/x509ca"
     INT_CA_PATH = ROOT_CA_PATH
-    KEY_FILE_PATH = CONFIG_PATH + '/private'
-    CERT_PATH = CONFIG_PATH + '/x509'
-    IPSEC_CONFIG_PATH = CONFIG_PATH + '/conf.d'
+    KEY_FILE_PATH = CONFIG_PATH + "/private"
+    CERT_PATH = CONFIG_PATH + "/x509"
+    IPSEC_CONFIG_PATH = CONFIG_PATH + "/conf.d"
     IPSEC_CONFIG_TEXT = """connections {
     <CONNECTION_NAME> {
         children {

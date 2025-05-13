@@ -5,15 +5,16 @@
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
 import os
+import re
 import socket
 from stunnel_config_get import StunnelConfigGet
 
 
 class FindFreeSTunnelPort:
+    START_PORT = 10001
+    END_PORT = 20000
+
     def __init__(self, host):
-        self.CONF_DIR = StunnelConfigGet.STUNNEL_DIR_NAME
-        self.START_PORT = 10001
-        self.END_PORT = 20000
         self.CONF_FILE_EXT = StunnelConfigGet.STUNNEL_CONF_EXT
         self.host = host
 
@@ -25,24 +26,24 @@ class FindFreeSTunnelPort:
         except socket.error:
             return False
 
-    def get_free_port(self):
-        ports = self.get_ports_from_conf_files()
+    def get_free_port(self, conf_dir=StunnelConfigGet.STUNNEL_DIR_NAME):
+        ports = self.get_ports_from_conf_files(conf_dir)
 
         for port in range(self.START_PORT, self.END_PORT):
             if port not in ports and self.is_port_unused(self.host, port):
                 return port
         return -1
 
-    def get_ports_from_conf_files(self):
+    def get_ports_from_conf_files(self, conf_dir=StunnelConfigGet.STUNNEL_DIR_NAME):
 
         ports = []
         pattern = re.compile(
-            # Sample: 127.0.0.1:10001 (Ip address is group1 and port group2)
+            # Sample: 127.0.0.1:10001
             rf"\s*{StunnelConfigGet.STUNNEL_ACCEPT}\s*=\s*((\d{{1,3}}\.){{3}}\d{{1,3}}):(\d+)"
         )
 
-        for filename in os.listdir(self.CONF_DIR):
-            file_path = os.path.join(self.CONF_DIR, filename)
+        for filename in os.listdir(conf_dir):
+            file_path = os.path.join(conf_dir, filename)
 
             if (
                 os.path.isfile(file_path)

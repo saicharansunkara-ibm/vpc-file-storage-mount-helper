@@ -77,7 +77,6 @@ class MountIbmshare(MountHelperBase):
         self.mounts = NfsMount().load_nfs_mounts()
         for mount in self.mounts:
             if mount.ip == ip_address and mount.mount_path == mount_path:
-                self.LogUser("Found a mount at: " + mount.mounted_at)
                 return True
         return False
 
@@ -87,15 +86,19 @@ class MountIbmshare(MountHelperBase):
         config_file_found = False
 
         mounted = self.is_share_mounted(LOOPBACK_ADDRESS, mount_path)
+        if mounted:
+            self.LogUser(ip_address + ":" + mount_path + " is already mounted as " + LOOPBACK_ADDRESS + ":" + mount_path)
 
         # Identify a port for stunnel.
-        port = FindFreeSTunnelPort(LOOPBACK_ADDRESS).get_free_port()
+        port = find_free_stunnel_port.FindFreeSTunnelPort(
+            LOOPBACK_ADDRESS
+        ).get_free_port()
 
         if port == -1:
             self.LogError("No Free ports found for use by Stunnel.")
             return False
 
-        self.LogDebug(f"Local port {port} is being used for setting up stunnel")
+        self.LogDebug(f"Local port {port} will be used for setting up next stunnel")
         st = StunnelConfigGet()
         st.open_with_remote_path(mount_path)
         config_file_found = st.is_found()
@@ -140,25 +143,29 @@ class MountIbmshare(MountHelperBase):
             return True
 
     # Cleans up unused conf files. Should not throw exception and prevent mount.
-    def cleanup_stale_conf(self):
-        for filename in os.listdir(StunnelConfigGet.STUNNEL_DIR_NAME):
+    def cleanup_stale_conf(self, dirname=StunnelConfigGet.STUNNEL_DIR_NAME):
+        # os.listdir always listed only one file in unit tests!!!
+        for entity in os.scandir(dirname):
+            filename = entity.name
             if (
-                filename.endswith(StunnelConfigGet.STUNNEL_CONF_EXT)
+                entity.is_file()
+                and filename.endswith(StunnelConfigGet.STUNNEL_CONF_EXT)
                 and StunnelConfigGet.IBM_SHARE_SIG in filename
             ):
+                full_file_name = entity.path
                 st = StunnelConfigGet()
-                full_file_name = os.path.join(
-                    StunnelConfigGet.STUNNEL_DIR_NAME, filename
-                )
                 st.open_with_full_path(full_file_name)
                 if st.is_found():
                     mount_path = st.get_full_mount_path()
-                    if not self.is_share_mounted(LOOPBACK_ADDRESS, mount_path):
-                        self.kill_stunnel_pid(mount_path)
-                        try:
-                            self.RemoveFile(full_file_name)
-                        except Exception as e:
-                            self.LogError(f"Removefile returned and exception:{e}")
+                    # mount_path is None if share is umounted and conf file identifier deleted
+                    if mount_path:
+                        if not self.is_share_mounted(LOOPBACK_ADDRESS, mount_path):
+                            self.kill_stunnel_pid(mount_path)
+                            try:
+                                self.RemoveFile(full_file_name)
+                            except Exception as e:
+                                # Log error is the only thing we should do. Do not stop
+                                self.LogError(f"Removefile returned an exception:{e}")
 
     def kill_stunnel_pid(self, mount_path):
         st = StunnelConfigGet()
@@ -168,10 +175,11 @@ class MountIbmshare(MountHelperBase):
         else:
             try:
                 pid_file = st.get_pid_file()
-                with open(pid_file, "r") as file:
-                    pid = int(file.readline().strip())
-                    if pid != 0:  # 0 targets process group. Must avoid.
-                        os.kill(pid, signal.SIGKILL)
+                if pid_file:
+                    with open(pid_file, "r") as file:
+                        pid = int(file.readline().strip())
+                        if pid != 0:  # 0 targets process group. Must avoid.
+                            os.kill(pid, signal.SIGKILL)
             # These may not cause problems. However, if start stunnel throws errors, we need to handle.
             except FileNotFoundError as fnf:
                 # Perhaps, we could do equivalent of
@@ -194,13 +202,14 @@ class MountIbmshare(MountHelperBase):
     # Create conf file and start stunnel.
     def start_stunnel(self, port, ip_address, mount_path):
         self.LogDebug(f"Starting stunnel for mounting {mount_path}")
-        st = StunnelConfigCreate(
+        st = stunnel_config_create.StunnelConfigCreate(
             accept_ip=LOOPBACK_ADDRESS,
             accept_port=port,
             connect_ip=ip_address,
             connect_port=MOUNT_PORT,
             remote_path=mount_path,
         )
+        st.write_file()
         if not st.is_valid():
             self.LogError(st.get_error())
             return False
@@ -218,13 +227,12 @@ class MountIbmshare(MountHelperBase):
                 result = subprocess.run(
                     [STUNNEL_COMMAND, conf_file],
                     check=False,
+                    text=True,
                     env=env_copy,
                     stderr=subprocess.PIPE,
                 )
                 if result.returncode != 0:
-                    self.LogError(
-                        f"Stunnel start returned error{result.stderr.decode()}"
-                    )
+                    self.LogError(f"Stunnel start returned error {result.stderr}")
                     return False
             except subprocess.CalledProcessError as cpe:
                 self.LogError(f"Stunnel start returned exception {cpe}")

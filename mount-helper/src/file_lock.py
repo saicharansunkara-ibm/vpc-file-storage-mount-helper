@@ -14,11 +14,11 @@ class LockHandler(MountHelperBase):
 
     @staticmethod
     def mount_share_lock():
-        return LockHandler('/var/lock/ibm_mount_helper.lck')
+        return LockHandler("/var/lock/ibm_mount_helper.lck")
 
     @staticmethod
     def renew_cert_lock():
-        return LockHandler('/var/lock/ibm_mount_helper_renew.lck')
+        return LockHandler("/var/lock/ibm_mount_helper_renew.lck")
 
     def __init__(self, lock_file):
         self.lock_file = lock_file
@@ -48,7 +48,7 @@ class LockHandler(MountHelperBase):
             self.LogDebug("Locked ok:" + self.lock_file)
             return True
         except IOError as e:
-            self.LogError('The other mount command is in processing:' + str(e))
+            self.LogError("The other mount command is in processing:" + str(e))
         except Exception as ex:
             self.LogException("GrabLock", ex)
         self.LogError("Failed to get lock")

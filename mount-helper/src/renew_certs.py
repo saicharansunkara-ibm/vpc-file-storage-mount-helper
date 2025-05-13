@@ -60,8 +60,14 @@ class RenewCerts(metadata.Metadata):
             cnt += 1
             if self.metadata_renew_cert():
                 return self.load_certificate()
-            self.wait(self.RENEW_RETRY_DELAY,
-                 "Generate cert failed, retry(" + str(cnt) + " of " + str(self.RENEW_MAX_RETRIES) + ")")
+            self.wait(
+                self.RENEW_RETRY_DELAY,
+                "Generate cert failed, retry("
+                + str(cnt)
+                + " of "
+                + str(self.RENEW_MAX_RETRIES)
+                + ")",
+            )
         return False
 
     def _renew_cert_cmd_line(self):
@@ -75,14 +81,16 @@ class RenewCerts(metadata.Metadata):
                 hasActiveMounts = self.get_ipsec_mgr().cleanup_unused_configs(None)
                 if not hasActiveMounts:
                     self.LogInfo(
-                        "Will not renew cert - no nfs mounts active or pending")
+                        "Will not renew cert - no nfs mounts active or pending"
+                    )
                     return True  # this is ok
             if self.metadata_renew_cert():
                 return True
             if not metadata.USE_METADATA_SERVICE:
                 return False
-            self.wait(self.RENEW_RETRY_DELAY,
-                      "Renew cert failed, retry(" + str(cnt) + ")")
+            self.wait(
+                self.RENEW_RETRY_DELAY, "Renew cert failed, retry(" + str(cnt) + ")"
+            )
         return False
 
     def _renew_cert_now(self):
@@ -90,12 +98,15 @@ class RenewCerts(metadata.Metadata):
 
     def metadata_get_new_certs(self):
         if not self.is_metadata_service_available():
-            return self.LogError("Could not connect to Metadata service.",
-                                 code=SysApp.ERR_METADATA_UNAVAILABLE)
+            return self.LogError(
+                "Could not connect to Metadata service.",
+                code=SysApp.ERR_METADATA_UNAVAILABLE,
+            )
 
         if not self.get_token():
-            return self.LogError("Problem getting token",
-                                 code=SysApp.ERR_METADATA_TOKEN)
+            return self.LogError(
+                "Problem getting token", code=SysApp.ERR_METADATA_TOKEN
+            )
 
         ipsec = self.get_ipsec_mgr()
         private_key = ipsec.read_private_key()
@@ -110,15 +121,17 @@ class RenewCerts(metadata.Metadata):
             return self.LogError("Problem with generating signing request.")
 
         if not self.generate_certs():
-            return self.LogError("Generate certs failed.",
-                                 code=SysApp.ERR_METADATA_CERT_RENEW)
+            return self.LogError(
+                "Generate certs failed.", code=SysApp.ERR_METADATA_CERT_RENEW
+            )
         return True
 
     def metadata_renew_cert(self):
         if not metadata.USE_METADATA_SERVICE:
-            self.LogDebug("Checking for local certs in: " +
-                          LocalInstall.cert_path())
-            return self.get_local_certs_no_metadata(LocalInstall.cert_path(), init=False)
+            self.LogDebug("Checking for local certs in: " + LocalInstall.cert_path())
+            return self.get_local_certs_no_metadata(
+                LocalInstall.cert_path(), init=False
+            )
 
         if not self.metadata_get_new_certs():
             return False
@@ -133,14 +146,14 @@ class RenewCerts(metadata.Metadata):
 
         renew_time_stamp = self.get_certificate_renew_timestamp()
         if not renew_time_stamp:
-            self.LogError(
-                'Certificate file not found or unable to load cert file.')
+            self.LogError("Certificate file not found or unable to load cert file.")
             return False
 
         ao = args_handler.ArgsHandler()
         to = timer_handler.TimerHandler()
         ret = to.schedule_certs_renewal(
-            renew_time_stamp, ao.get_renew_certificate_cmd_line())
+            renew_time_stamp, ao.get_renew_certificate_cmd_line()
+        )
         return ret
 
     def install_root_cert_using_config(self, install_path, cert_path):
@@ -167,8 +180,8 @@ class RenewCerts(metadata.Metadata):
         ipsec.remove_all_certs(root=True)
         for ca in install_cas:
             if not ipsec.install_root_cert(
-                    get_filename(ca.fname),
-                    self.ReadFile(ca.fname)):
+                get_filename(ca.fname), self.ReadFile(ca.fname)
+            ):
                 return False
 
         if cfg.name == cfgInstall.name:
@@ -188,9 +201,7 @@ class RenewCerts(metadata.Metadata):
         if len(cas) > 0:
             self.LogInfo("Installing RootCA(s)")
             for ca in cas:
-                if not ipsec.install_root_cert(
-                        get_filename(ca),
-                        self.ReadFile(ca)):
+                if not ipsec.install_root_cert(get_filename(ca), self.ReadFile(ca)):
                     return False
             if not ipsec.reload_certs(root=True):
                 return False
