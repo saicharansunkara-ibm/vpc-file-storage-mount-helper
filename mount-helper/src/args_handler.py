@@ -169,12 +169,16 @@ class ArgsHandler(MountHelperBase):
                 elif MOUNT_OPTION_IPSEC == option.lower():
                     is_secure = True
                     eit_counter += 1
-                    error_selection += " " + str(eit_counter) + ") " + MOUNT_OPTION_IPSEC          
+                    error_selection += (
+                        " " + str(eit_counter) + ") " + MOUNT_OPTION_IPSEC
+                    )
                 elif MOUNT_OPTION_STUNNEL == option.lower():
                     is_stunnel = True
                     is_secure = True
                     eit_counter += 1
-                    error_selection += " " + str(eit_counter) + ") " + MOUNT_OPTION_STUNNEL
+                    error_selection += (
+                        " " + str(eit_counter) + ") " + MOUNT_OPTION_STUNNEL
+                    )
                 else:
                     o_options.append(option)
             elif SECURE_ARG in option.lower().split("="):

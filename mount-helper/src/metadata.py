@@ -18,7 +18,7 @@ USE_METADATA_SERVICE = True
 META_IP = "169.254.169.254"
 META_PORT_HTTP = 80
 META_PORT_HTTPS = 443
-META_URL_TOKEN = "instance_identity/v1/token" 
+META_URL_TOKEN = "instance_identity/v1/token"
 META_URL_CERT = "instance_identity/v1/certificates"
 META_URL_INSTANCE = "metadata/v1/instance"
 META_VERSION = "2022-03-01"
@@ -84,18 +84,21 @@ class JsonRequest(MountHelperBase):
             if len(self.params) > 0:
                 url += "?" + urlencode(self.params)
 
-            data = self.data.encode('utf-8') if self.data else None
+            data = self.data.encode("utf-8") if self.data else None
 
             self.LogDebug("Url: " + url)
-            req = Request(url=url, data=data,
-                          headers=self.headers, method=method)
+            req = Request(url=url, data=data, headers=self.headers, method=method)
             resp = self.do_urlopen(req)
             return self.set_resp_json(resp)
         except socket.timeout:
             self.log_user_error("Request Timeout Error", "Socket Timeout")
         except HTTPError as errh:
-            msg = "Problem accessing (%s) - Status:%d Reason:%s Headers(%s)" % \
-                (url, errh.code, errh.reason, errh.headers)
+            msg = "Problem accessing (%s) - Status:%d Reason:%s Headers(%s)" % (
+                url,
+                errh.code,
+                errh.reason,
+                errh.headers,
+            )
             self.log_user_error("Http Error", msg)
         except URLError as erru:
             msg = "Problem accessing (%s) - Reason:%s" % (url, erru.reason)
@@ -116,7 +119,7 @@ class JsonRequest(MountHelperBase):
             return None
 
         if ndx >= 0:
-            if len(self.response[name]) < (ndx+1):
+            if len(self.response[name]) < (ndx + 1):
                 self.LogError("Index out of range: " + name)
                 return None
 
@@ -163,20 +166,18 @@ class Metadata(CertificateHandler):
                 ret = True
         except:
             pass
-        self.LogDebug("Connect %s:%s %s" %
-                      (ip, port, "success" if ret else "failed"))
+        self.LogDebug("Connect %s:%s %s" % (ip, port, "success" if ret else "failed"))
         return ret
-
 
     def new_request(self, url, token=None):
         use_ssl = self.port == META_PORT_HTTPS
         pfx = "https" if use_ssl else "http"
-        url = "%s://%s/%s" % (pfx, META_IP,url)
+        url = "%s://%s/%s" % (pfx, META_IP, url)
         req = JsonRequest()
         req.init_request(url, META_TIMEOUT)
         if use_ssl:
             req.create_ssl_context()
-        req.add_header('Accept', 'application/json')
+        req.add_header("Accept", "application/json")
         req.add_param("version", META_VERSION)
         if token:
             req.add_header("Authorization", "Bearer " + token)
@@ -197,12 +198,15 @@ class Metadata(CertificateHandler):
 
         cfgShare = ShareConfig(None)
         expires_in = cfgShare.get_certificate_duration()
-        if (not expires_in or int(expires_in) < META_CERTIFICATE_DURATION_MIN
-               or int(expires_in) > META_CERTIFICATE_DURATION_MAX):
+        if (
+            not expires_in
+            or int(expires_in) < META_CERTIFICATE_DURATION_MIN
+            or int(expires_in) > META_CERTIFICATE_DURATION_MAX
+        ):
             expires_in = str(META_CERTIFICATE_DURATION_MAX)
 
         req = self.new_request(META_URL_CERT, self.token)
-        req.set_data('{"csr": "' + self.csr + '", "expires_in": ' + expires_in + '}')
+        req.set_data('{"csr": "' + self.csr + '", "expires_in": ' + expires_in + "}")
         if not req.post():
             return False
 

@@ -9,6 +9,9 @@ import tempfile
 import random
 from config import SubProcess
 from common import *
+import stunnel_config_get
+import stunnel_config_create
+from find_free_stunnel_port import FindFreeSTunnelPort
 import shutil
 
 TEST_CERT = """-----BEGIN CERTIFICATE-----
@@ -32,7 +35,7 @@ T7+4GIeaWybZAwR8ku7vlHZg9mYehphiqc7It4zJpMcVISuK7BKFhqD43i3dBMz1
 RR5qgsMaVVlG9+bUwX/ByRtSJRk7eh8TEyg6vM2tNg==
 -----END CERTIFICATE-----"""
 
-TEST_PRIVATE_KEY = '''-----BEGIN PRIVATE KEY-----
+TEST_PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
 MIIJQQIBADANBgkqhkiG9w0BAQEFAASCCSswggknAgEAAoICAQC1Nl4AmQImFtKc
 bEDLfHf1a6jlFj+4gUzuX61IhWW9N4APx9/ORPu4+YB533z+pUGm5LeWijcb9mWE
 9WREyeqO/9gBzJNuq2bRZ0VwWCcPFT99PxNVIdafoVCugF5Sf8SmkId6nB3kHHyE
@@ -83,9 +86,9 @@ wHJg7kEceXHItGZjRFfQRsInJ6bCrP+9r+i4lKiYeTyzgpNUwkD/fUXYdgw1SOli
 zzlVa0UtCrxoq6YtvrTP+18xfcAcOIQXA4JIyHkqFLdxb0g4dTod42tRyLz9GrV9
 IO2uwRePEYhNDMosZWXLWjp8haEIGvwiW+K0mMtWtISvuEKOrcxaiMQlrWeRVnpt
 /agtWgm9fMVRS4xb9m73pY6Hi/L7
------END PRIVATE KEY-----'''
+-----END PRIVATE KEY-----"""
 
-TEST_ROOT_CERT = '''-----BEGIN CERTIFICATE-----
+TEST_ROOT_CERT = """-----BEGIN CERTIFICATE-----
 MIIDNTCCAh2gAwIBAgIUCAv1EI1FGdubbYyka+MaAQsCJQQwDQYJKoZIhvcNAQEL
 BQAwFjEUMBIGA1UEAxMLZWl0LXJvb3QtY2EwHhcNMjIwNzAxMTUzNzQyWhcNMzIw
 NjI4MTUzODEyWjAWMRQwEgYDVQQDEwtlaXQtcm9vdC1jYTCCASIwDQYJKoZIhvcN
@@ -104,7 +107,7 @@ K8KNwYPRXHfYemHQmDVi3LlBw3OucXxqFDPTL37msCrLj0s2W1HAN2Gq6TZJd9BP
 KtQnVB5dtvHCybOpuqoSMGQztS4YNpgaqC5WUKAH5Sw1HU04RO/1mQkKR/LQ3GBC
 iT8R1HZkStVUnHX+pj/eXZftYJJolrJ3l7+8cedx+cYXE3/26V5YydPlxblXwmev
 HcR3dmcTHIX1
------END CERTIFICATE-----'''
+-----END CERTIFICATE-----"""
 
 
 def show(msg, tag=""):
@@ -154,7 +157,7 @@ def random_ip():
 class MySubProcess(object):
     def __init__(self, ret, data):
         pret = SubProcess([])
-        pret.set_output(ret, data.encode(encoding='utf-8'), "")
+        pret.set_output(ret, data.encode(encoding="utf-8"), "")
         self.patch = mock.patch("common.SubProcess.run")
         self.func = self.patch.__enter__()
         self.func.return_value = pret
@@ -167,7 +170,49 @@ class MySubProcess(object):
         pass
 
 
-class MyTempDir():
+class StunnelCommon:
+    def create_conf_files(self, conf_dir, port_list):
+        index = 0
+        for port in port_list:
+            index += 1
+            config_filename = f"ibmshare_file_{port}.conf"
+            buffer = (
+                "########################################################################"
+                "\n"
+                "# Generated Stunnel config for mounting ibmshare for EIT. Do not edit. #"
+                "\n"
+                "# Time of creation : 2025-05-10 14:40:57.020503"
+                "\n"
+                "########################################################################"
+                "\n"
+                f"# stunnel_identifier = /C0FFEE{index}"
+                "\n"
+                f"pid =  /var/run/stunnel4/ibmshare_C0FFEE{index}.pid"
+                "\n"
+                f"[ibmshare-C0FFEE{index}]"
+                "\n"
+                "client = yes"
+                "\n"
+                f"accept = 127.0.0.1:{port}"
+                "\n"
+                "connect = 10.0.0.1:20049"
+                "\n"
+                "verifyPeer = yes"
+                "\n"
+                "verifyChain = yes"
+                "\n"
+                "cafile = allca.pem"
+                "\n"
+            )
+            config_filename = os.path.join(
+                conf_dir,
+                config_filename + stunnel_config_get.StunnelConfigGet.STUNNEL_CONF_EXT,
+            )
+            with open(config_filename, "w") as out_file:
+                out_file.write(buffer)
+
+
+class MyTempDir:
     def __init__(self, id="1"):
         self.name = "/tmp/mount.helper.tmp" + id
         self.recreate()
@@ -187,8 +232,7 @@ class MyTempDir():
         self.mkdir()
 
     def get_temp_filename(self, postfix=""):
-        fname = os.path.join(self.name, next(
-            tempfile._get_candidate_names()) + postfix)
+        fname = os.path.join(self.name, next(tempfile._get_candidate_names()) + postfix)
         assert not os.path.exists(fname)
         return fname
 
