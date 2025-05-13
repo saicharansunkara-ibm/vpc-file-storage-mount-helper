@@ -1,5 +1,6 @@
 import unittest
 from stunnel_config_create import StunnelConfigCreate
+from stunnel_config_get import StunnelConfigGet
 import tempfile
 import os
 from datetime import datetime
@@ -18,6 +19,14 @@ EYE_CATCHER = "ibmshare-C0FFEE"
 
 
 class TestStunnelConfigCreate(unittest.TestCase):
+
+    def setUp(self):
+        self.saved_stunnel_dir = StunnelConfigGet.STUNNEL_DIR_NAME
+        self.saved_pid_file_dir = StunnelConfigGet.STUNNEL_PID_FILE_DIR
+
+    def tearDown(self):
+        StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = self.saved_pid_file_dir
 
     def write_working_sample(self, working_sample):
         buffer = (
@@ -77,11 +86,16 @@ class TestStunnelConfigCreate(unittest.TestCase):
         self.assertEqual(res, True)
 
     def test_write_file_success(self):
+        StunnelConfigGet.STUNNEL_DIR_NAME = "/etc/stunnel"
         s = StunnelConfigCreate(
             ACCEPT_IP, ACCEPT_PORT, CONNECT_IP, CONNECT_PORT, REMOTE_PATH
         )
         config_dir = tempfile.mkdtemp()
+
         conf_filepath = s.filepath
+
+        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = "/var/run/stunnel4"
         generated_file = os.path.join(config_dir, "generated.int.conf")
         s.filepath = generated_file
         s.write_file()
@@ -90,6 +104,7 @@ class TestStunnelConfigCreate(unittest.TestCase):
         self.write_working_sample(working_sample)
         self.remove_conf_header(generated_file, cleaned_file)
         self.assertEqual(conf_filepath, PRE_GENERATED_CONFIG_FILE_NAME)
+
         cmp = self.compare_files(cleaned_file, working_sample)
         self.assertEqual(cmp, True)
         self.assertEqual(s.is_valid(), True)

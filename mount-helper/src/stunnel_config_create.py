@@ -19,7 +19,6 @@ class StunnelConfigCreate:
         self.connect_ip = connect_ip
         self.connect_port = connect_port
         self.remote_path = remote_path
-        self.filepath = None
         self.valid = False
         self.error = None
         self.filepath = StunnelConfigGet.get_config_file_from_remote_path(remote_path)

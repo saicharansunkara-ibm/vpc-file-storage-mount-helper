@@ -21,6 +21,17 @@ STUNNEL_COMMAND = "stunnel"
 
 
 class TestMountIbmshare(unittest.TestCase):
+    def setUp(self):
+        self.saved_stunnel_dir = stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME
+        self.saved_pid_file_dir = (
+            stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR
+        )
+
+    def tearDown(self):
+        stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
+        stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR = (
+            self.saved_pid_file_dir
+        )
 
     def create_conf_files(self):
         config_dir = tempfile.mkdtemp()
