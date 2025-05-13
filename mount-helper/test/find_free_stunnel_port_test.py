@@ -20,6 +20,19 @@ LOOPBACK_ADDRESS = "127.0.0.1"
 
 
 class TestFindFreeStunnelPort(unittest.TestCase):
+
+    def setUp(self):
+        self.saved_stunnel_dir = stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME
+        self.saved_pid_file_dir = (
+            stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR
+        )
+
+    def tearDown(self):
+        stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
+        stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR = (
+            self.saved_pid_file_dir
+        )
+
     def get_lowest_free_permitted_port(self, port_array, min_port, max_port):
 
         for port in range(min_port, max_port + 1):
@@ -58,6 +71,8 @@ class TestFindFreeStunnelPort(unittest.TestCase):
             # Creates one conf file per port_array element
             stc = StunnelCommon()
 
+            stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+            stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
             stc.create_conf_files(config_dir, port_array)
             with patch.object(
                 FindFreeSTunnelPort,

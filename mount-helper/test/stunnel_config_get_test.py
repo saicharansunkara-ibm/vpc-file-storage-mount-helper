@@ -21,6 +21,14 @@ EYE_CATCHER = "ibmshare-C0FFEE"
 
 class TestStunnelConfigGet(unittest.TestCase):
 
+    def setUp(self):
+        self.saved_stunnel_dir = StunnelConfigGet.STUNNEL_DIR_NAME
+        self.saved_pid_file_dir = StunnelConfigGet.STUNNEL_PID_FILE_DIR
+
+    def tearDown(self):
+        StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = self.saved_pid_file_dir
+
     def test_get_pid_file_dir(self):
         result = StunnelConfigGet.get_pid_file_dir()
         self.assertEqual(result, STUNNEL_PID_FILE_DIR)
@@ -51,7 +59,7 @@ class TestStunnelConfigGet(unittest.TestCase):
         res = err.startswith(StunnelConfigGet.FILE_NOT_FOUND_ERR)
         self.assertEqual(res, True)
 
-    def test_get_config_file_from_remote_pat(self):
+    def test_get_config_file_from_remote_path(self):
         self.assertEqual(
             PRE_GENERATED_CONFIG_FILE_NAME,
             StunnelConfigGet.get_config_file_from_remote_path(REMOTE_PATH),
@@ -97,6 +105,9 @@ class TestStunnelConfigGet(unittest.TestCase):
             EYE_CATCHER + StunnelConfigGet.STUNNEL_CONF_EXT,
         )
 
+        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
+
         self.create_conf_file(config_filename)
 
         s = StunnelConfigGet()
@@ -108,6 +119,8 @@ class TestStunnelConfigGet(unittest.TestCase):
         self.assertEqual(s.get_config_file(), config_filename)
         self.assertEqual(s.get_full_mount_path(), REMOTE_PATH)
         shutil.rmtree(config_dir)
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = self.saved_pid_file_dir
+        StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
 
 
 if __name__ == "__main__":
