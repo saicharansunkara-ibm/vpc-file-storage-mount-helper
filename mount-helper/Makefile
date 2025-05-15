@@ -1,7 +1,7 @@
 # Makefile to build deb and rpm packages to install mount.ibmshare on target Linux machines.
 
 NAME := mount.ibmshare
-APP_VERSION := 0.1.2
+APP_VERSION := 0.1.3
 MAINTAINER := "Genctl Share"
 DESCRIPTION := "IBM Mount Share helper"
 LICENSE := "IBM"
