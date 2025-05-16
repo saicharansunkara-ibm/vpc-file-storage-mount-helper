@@ -42,7 +42,7 @@ deb-build:
 	#echo "Depends: python3(>= $(MIN_PYTHON_VER)), strongswan-swanctl(>= $(MIN_STRONGSWAN_VER)), charon-systemd(>= $(MIN_STRONGSWAN_VER)), nfs-common" >> $(CONTROL)
 	echo "Depends: python3(>= $(MIN_PYTHON_VER)), nfs-common" >> $(CONTROL)
 
-	export DPKG_DEB_COMPRESS := xz
+	export DPKG_DEB_COMPRESS=xz
 
 	dpkg-deb --build $(BUILD_DIR)
 
