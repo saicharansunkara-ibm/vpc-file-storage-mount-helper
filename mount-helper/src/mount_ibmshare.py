@@ -87,7 +87,15 @@ class MountIbmshare(MountHelperBase):
 
         mounted = self.is_share_mounted(LOOPBACK_ADDRESS, mount_path)
         if mounted:
-            self.LogUser(ip_address + ":" + mount_path + " is already mounted as " + LOOPBACK_ADDRESS + ":" + mount_path)
+            self.LogUser(
+                ip_address
+                + ":"
+                + mount_path
+                + " is already mounted as "
+                + LOOPBACK_ADDRESS
+                + ":"
+                + mount_path
+            )
 
         # Identify a port for stunnel.
         port = find_free_stunnel_port.FindFreeSTunnelPort(
@@ -227,12 +235,13 @@ class MountIbmshare(MountHelperBase):
                 result = subprocess.run(
                     [STUNNEL_COMMAND, conf_file],
                     check=False,
-                    text=True,
                     env=env_copy,
                     stderr=subprocess.PIPE,
                 )
                 if result.returncode != 0:
-                    self.LogError(f"Stunnel start returned error {result.stderr}")
+                    self.LogError(
+                        f'''Stunnel start returned error "{result.stderr.decode('utf-8')}"'''
+                    )
                     return False
             except subprocess.CalledProcessError as cpe:
                 self.LogError(f"Stunnel start returned exception {cpe}")
