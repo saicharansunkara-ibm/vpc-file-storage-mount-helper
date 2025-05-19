@@ -16,11 +16,20 @@ from args_handler import ArgsHandler
 import time
 import subprocess
 import find_free_stunnel_port
+import logging
 
 STUNNEL_COMMAND = "stunnel"
 
 
 class TestMountIbmshare(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        logging.disable(logging.CRITICAL)
+
+    @classmethod
+    def tearDownClass(cls):
+        logging.disable(logging.NOTSET)
+
     def setUp(self):
         self.saved_stunnel_dir = stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME
         self.saved_pid_file_dir = (
@@ -172,10 +181,10 @@ class TestMountIbmshare(unittest.TestCase):
         )
 
         subprocess_handle.return_value = subprocess.CompletedProcess(
-            args=["stunnel", "conf file not found"],
+            args=["stunnel", "Incorrect file name specified"],
             returncode=99,
             stdout="",
-            stderr="cannot find conf file",
+            stderr="This error was simulated in a unit test".encode("utf-8"),
         )
         ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
         self.assertEqual(ret, False)
@@ -203,7 +212,10 @@ class TestMountIbmshare(unittest.TestCase):
         StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
         find_free_stunnel_port_handle.return_value = 20001
         subprocess_handle.return_value = subprocess.CompletedProcess(
-            args=["stunnel", "All good"], returncode=0, stdout="", stderr="All is well"
+            args=["stunnel", "All good"],
+            returncode=0,
+            stdout="no error".encode("utf-8"),
+            stderr="All is well",
         )
 
         # Create config file.
@@ -308,12 +320,11 @@ class TestMountIbmshare(unittest.TestCase):
 
 class DummySuccessObject:
     def __init__(self):
-        self.stderr = "stderr"
-        self.stdout = "stdout"
+        self.stdout = "stdout".encode("utf-8")
         self.returncode = 0
 
     def get_error(self):
-        return "dummy error"
+        return ""
 
     def is_error(self):
         return False
@@ -321,8 +332,7 @@ class DummySuccessObject:
 
 class DummyErrorObject:
     def __init__(self):
-        self.stderr = "stderr"
-        self.stdout = "stdout"
+        self.stderr = "stderr".encode("utf-8")
         self.returncode = 1
 
     def get_error(self):
