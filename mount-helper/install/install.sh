@@ -6,6 +6,7 @@
 
 INSTALL_ARG="$1"
 INSTALL_MOUNT_OPTION_ARG="$2"
+STUNNEL_ENABLED=false
 
 APP_NAME="IBM Mount Share Helper"
 SCRIPT_NAME="mount.ibmshare"
@@ -409,6 +410,10 @@ install_apps() {
         if is_linux LINUX_SUSE; then
            sudo systemctl unmask strongswan.service
         fi
+        # Check if stunnel is installed
+        if command -v stunnel >/dev/null 2>&1; then
+            echo "STUNNEL is installed. Please run './install_stunnel.sh uninstall' to uninstall it..."
+        fi
         exit_ok "UnInstall completed ok"
     fi
     _install_apps "$@" 
@@ -530,7 +535,10 @@ init_mount_helper () {
         fi
         exit_ok "Install completed ok"
     fi
-    if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--tls" ]]; then
+    if [[ "$INSTALL_ARG" == "--stunnel" ]]; then
+        STUNNEL_ENABLED=true
+    fi
+    if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--tls" || "$INSTALL_ARG" == "--stunnel" ]]; then
         if [[ "$INSTALL_ARG" == "--tls" ]]; then
             INSTALL_MOUNT_OPTION_ARG="--tls"
         fi
@@ -549,6 +557,18 @@ init_mount_helper () {
     check_result "Problem installing ssl certs"
     if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
       install_tls_certificates $CERT_PATH
+    fi
+    # Check if STUNNEL_ENABLED is set to true
+    if [ "$STUNNEL_ENABLED" == "true" ]; then
+        echo "STUNNEL is enabled. Installing stunnel..."
+    
+        # Make sure the script exists
+        if [ -x "./install_stunnel.sh" ]; then
+            ./install_stunnel.sh install
+        else
+            echo "Error: install_stunnel.sh not found or not executable in current directory."
+            exit 1
+        fi
     fi
     exit_ok "Install completed ok"
 }
