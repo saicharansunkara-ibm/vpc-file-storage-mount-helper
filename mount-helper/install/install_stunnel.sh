@@ -3,6 +3,7 @@
 # Constants
 INSTALL="install"
 UNINSTALL="uninstall"
+CONF_FILE=/etc/ibmcloud/share.conf
 
 # Temporary: Add a test certificate to /etc/stunnel if stunnel is installed
 # This is a non-production test certificate used only during development.
@@ -50,11 +51,34 @@ EOF
     fi
 }
 
+store_stunnel_env() {
+local stunnel_env="STUNNEL_ENV"
+
+    # It is okay to store empty value.
+    local value="$STUNNEL_ENV"
+    sed -i.bak "/${stunnel_env}=/d"  "$CONF_FILE"
+
+    if  ! grep -q $stunnel_env $CONF_FILE
+    then
+        echo ${stunnel_env}="$value" >> $CONF_FILE
+    fi
+}
+
+store_trusted_ca_file_name() {
+local root_ca="TRUSTED_ROOT_CACERT"
+
+    sed -i.bak "/${root_ca}=/d" "$CONF_FILE"
+
+    if  ! grep -q $root_ca $CONF_FILE
+    then
+        echo ${root_ca}="$@" >> $CONF_FILE
+    fi
+}
 
 # Create necessary directories
 setup_stunnel_directories() {
-    sudo mkdir -p /var/run/stunnel4/ /etc/stunnel
-    sudo chmod 744 /var/run/stunnel4/ /etc/stunnel
+    sudo mkdir -p /var/run/stunnel4/ /etc/stunnel /var/log/stunnel
+    sudo chmod 744 /var/run/stunnel4/ /etc/stunnel /var/log/stunnel
 }
 
 # Install stunnel on Ubuntu/Debian-based systems
@@ -66,6 +90,8 @@ install_stunnel_ubuntu_debian() {
     setup_stunnel_directories
     create_stunnel_cert_if_installed
 
+    store_trusted_ca_file_name "/etc/ssl/certs/ca-certificates.crt"
+    store_stunnel_env
     # Verify installation
     if command -v stunnel > /dev/null; then
         echo "stunnel installed successfully!"
@@ -86,6 +112,9 @@ install_stunnel_rhel_centos_rocky() {
     setup_stunnel_directories
     create_stunnel_cert_if_installed
 
+    store_trusted_ca_file_name "/etc/pki/tls/certs/ca-bundle.crt"
+    store_stunnel_env
+
     # Verify installation
     if command -v stunnel > /dev/null; then
         echo "stunnel installed successfully!"
@@ -102,6 +131,9 @@ install_stunnel_suse() {
     sudo zypper install -y stunnel
     setup_stunnel_directories
     create_stunnel_cert_if_installed
+
+    store_trusted_ca_file_name  "/etc/ssl/ca-bundle.pem"
+    store_stunnel_env
 
     # Verify installation
     if command -v stunnel > /dev/null; then

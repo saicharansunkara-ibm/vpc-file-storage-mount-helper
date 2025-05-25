@@ -17,6 +17,7 @@ import time
 import subprocess
 import find_free_stunnel_port
 import logging
+from unittest.mock import patch
 
 STUNNEL_COMMAND = "stunnel"
 
@@ -161,34 +162,42 @@ class TestMountIbmshare(unittest.TestCase):
         mis.kill_stunnel_pid("/C0FFEE")
         self.delete_conf_files_dir(config_dir)
 
+    def fake_get_trusted_ca_file(self):
+        return "/dev/null"
+
     @mock.patch("subprocess.run")
     def test_start_stunnel(self, subprocess_handle):
-        config_dir = tempfile.mkdtemp()
-        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
-        StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
-        subprocess_handle.return_value.returncode = 0
-        subprocess_handle.return_value = subprocess.CompletedProcess(
-            args=["dummy", "dummy"], returncode=0
-        )
-        mis = mount_ibmshare.MountIbmshare()
-        ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
-        self.assertEqual(ret, True)
-        self.assertEqual(1, subprocess_handle.call_count)
-        self.assertEqual(subprocess_handle.call_args[0][0][0], STUNNEL_COMMAND)
-        self.assertEqual(
-            os.path.join(config_dir, "ibmshare_C0FFEE.conf"),
-            subprocess_handle.call_args[0][0][1],
-        )
+        with patch.object(
+                StunnelConfigCreate,
+                "get_trusted_ca_file",
+                new=self.fake_get_trusted_ca_file,
+            ):
+            config_dir = tempfile.mkdtemp()
+            StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+            StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
+            subprocess_handle.return_value.returncode = 0
+            subprocess_handle.return_value = subprocess.CompletedProcess(
+                args=["dummy", "dummy"], returncode=0
+            )
+            mis = mount_ibmshare.MountIbmshare()
+            ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
+            self.assertEqual(ret, True)
+            self.assertEqual(1, subprocess_handle.call_count)
+            self.assertEqual(subprocess_handle.call_args[0][0][0], STUNNEL_COMMAND)
+            self.assertEqual(
+                os.path.join(config_dir, "ibmshare_C0FFEE.conf"),
+                subprocess_handle.call_args[0][0][1],
+            )
 
-        subprocess_handle.return_value = subprocess.CompletedProcess(
-            args=["stunnel", "Incorrect file name specified"],
-            returncode=99,
-            stdout="",
-            stderr="This error was simulated in a unit test".encode("utf-8"),
-        )
-        ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
-        self.assertEqual(ret, False)
-        self.delete_conf_files_dir(config_dir)
+            subprocess_handle.return_value = subprocess.CompletedProcess(
+                args=["stunnel", "Incorrect file name specified"],
+                returncode=99,
+                stdout="",
+                stderr="This error was simulated in a unit test".encode("utf-8"),
+            )
+            ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
+            self.assertEqual(ret, False)
+            self.delete_conf_files_dir(config_dir)
 
     def setup_mocks(self, mis, is_share_mounted=False):
 

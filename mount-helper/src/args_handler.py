@@ -85,7 +85,7 @@ class ArgsHandler(MountHelperBase):
         self.ip_address, self.mount_path = NfsMount.extract_source(self.mount_source)
         if not self.ip_address or not self.mount_path:
             return self.LogError(
-                "Provide the mount source as <nfs_host>:<path>("
+                "Provide the mount source as <ip address or resolvable nfs_host>:<path>("
                 + self.mount_source
                 + ")."
             )

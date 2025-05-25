@@ -150,6 +150,17 @@ def write_bash_file(fname, data):
     os.chmod(fname, 0o777)
 
 
+# Used for debugging.
+def print_file_contents(file_name):
+    print(f"==={file_name}===")
+    try:
+        with open(file_name, "r") as file:
+            for line in file:
+                print(line, end="")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
 def random_ip():
     return ".".join(str(random.randint(0, 255)) for _ in range(4))
 

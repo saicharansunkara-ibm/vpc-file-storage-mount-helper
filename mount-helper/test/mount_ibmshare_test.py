@@ -15,7 +15,7 @@ from args_handler import ArgsHandler
 
 def do_mount(ret=0, data=""):
     mo = mount_ibmshare.MountIbmshare()
-    mo.is_share_mounted = MagicMock(return_value = False) 
+    mo.is_share_mounted = MagicMock(return_value=False)
     mo.SetDebugEnabled()
     mo.EnableLogStore()
     with MySubProcess(ret, data) as run:
@@ -25,8 +25,15 @@ def do_mount(ret=0, data=""):
     return mo, out
 
 
-def init_ocert(ocert, load=True, ncw=True, exp=False, rcw=True,
-               create_config=True, cleanup_config=True):
+def init_ocert(
+    ocert,
+    load=True,
+    ncw=True,
+    exp=False,
+    rcw=True,
+    create_config=True,
+    cleanup_config=True,
+):
     ox = ocert.return_value
     ox.load_certificate.return_value = load
     ox.new_cert_now.return_value = ncw
@@ -40,10 +47,11 @@ def init_ocert(ocert, load=True, ncw=True, exp=False, rcw=True,
     ox.ipsec = ipsec
     return ox
 
-def do_already_mounted(ret=0, data="",ip="",path=""):
+
+def do_already_mounted(ret=0, data="", ip="", path=""):
     mo = mount_ibmshare.MountIbmshare()
     with MySubProcess(ret, data) as run:
-        ret = mo.is_share_mounted(ip,path)
+        ret = mo.is_share_mounted(ip, path)
     return mo, ret
 
 
@@ -66,15 +74,14 @@ class TestMountIbmshareOther(unittest.TestCase):
 
     def test_is_share_mounted(self):
         data = "1.1.1.1:already_mounted unknown mounted_at ccc nfs"
-        mo, ret = do_already_mounted(data=data,
-            ip='1.1.1.1',path="already_mounted")
+        mo, ret = do_already_mounted(data=data, ip="1.1.1.1", path="already_mounted")
         self.assertTrue(ret)
 
     def test_share_not_mounted(self):
         mo, ret = do_already_mounted()
         self.assertFalse(ret)
 
-    @mock.patch('sys.argv', ["invalid", "args"])
+    @mock.patch("sys.argv", ["invalid", "args"])
     def test_mount_invalid_args(self):
         mo = mount_ibmshare.MountIbmshare()
         ret = mo.run()
@@ -92,18 +99,27 @@ class TestMountIbmshareOther(unittest.TestCase):
             self.assertTrue(ipsec.HasLogMessage("Non-IPsec mount requested"))
 
 
-@mock.patch('sys.argv', ["app", "192.168.56.1:/testshare", "/media/test",  "-o secure=true"])
-@mock.patch('mount_ibmshare.RenewCerts')
+@mock.patch(
+    "sys.argv", ["app", "192.168.56.1:/testshare", "/media/test", "-o secure=true"]
+)
+@mock.patch("mount_ibmshare.RenewCerts")
 class TestMountIbmshare(unittest.TestCase):
 
     def test_mount_with_new_cert_got_ok(self, ocert):
         init_ocert(ocert, True, False, True, True)
         mo, ret = do_mount()
         self.assertTrue(ret)
-        cmd = ['mount', '-t', 'nfs4', '-o', 'sec=sys,nfsvers=4.1,',
-               '192.168.56.1:/testshare', '/media/test']
+        cmd = [
+            "mount",
+            "-t",
+            "nfs4",
+            "-o",
+            "sec=sys,nfsvers=4.1,",
+            "192.168.56.1:/testshare",
+            "/media/test",
+        ]
         self.assertEqual(mo._run.func.call_count, 1)
-        #mo._run.func.assert_called_with(cmd)
+        # mo._run.func.assert_called_with(cmd)
 
     def test_load_mounted_shares_returns_error(self, ocert):
         _, ret = do_mount(-990, "")
@@ -130,14 +146,25 @@ class TestMountIbmshare(unittest.TestCase):
         o = init_ocert(ocert)
         _, ret = do_mount()
         self.assertTrue(ret)
-        o.ipsec.create_config.assert_called_with(
-            "192.168.56.1")
+        o.ipsec.create_config.assert_called_with("192.168.56.1")
 
     def test_strong_swan_config_create_fails(self, ocert):
         o = init_ocert(ocert, create_config=False)
         _, ret = do_mount()
         self.assertFalse(ret)
         self.assertEqual(o.ipsec.create_config.call_count, 1)
+
+    @mock.patch("os.path.isdir")
+    def test_set_installed_stunnel(self, is_dir_handle, ignore_ocert):
+        is_dir_handle.return_value = False
+        mo = mount_ibmshare.MountIbmshare()
+        ret = mo.set_installed_stunnel()
+        self.assertEqual(ret, False)
+
+        is_dir_handle.return_value = True
+        mo = mount_ibmshare.MountIbmshare()
+        ret = mo.set_installed_stunnel()
+        self.assertEqual(ret, True)
 
     def test_strong_swan_config_cleanup(self, ocert):
         o = init_ocert(ocert, cleanup_config=False)
@@ -146,5 +173,5 @@ class TestMountIbmshare(unittest.TestCase):
         o.ipsec.cleanup_unused_configs.assert_called_with([])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
