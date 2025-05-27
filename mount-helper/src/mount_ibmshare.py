@@ -27,8 +27,22 @@ class MountIbmshare(MountHelperBase):
         self.lockhandler = file_lock.LockHandler.mount_share_lock()
 
     def set_installed_stunnel(self):
-        # We have not determined how certs are going to be handled.
-        return True
+        stunnel_dirs = ["/etc/stunnel", "/var/run/stunnel4/", "/var/log/stunnel/"]
+        errored = False
+        for directory in stunnel_dirs:
+            if not os.path.isdir(directory):
+                self.LogError(f"The directory '{directory}' does not exist.")
+                errored = True
+
+        if errored:
+            self.LogError(
+                f"The Stunnel setup required for encryption in transit is missing."
+            )
+            self.LogError(
+                f"Please download mount helper and run  './install.sh --stunnel' to complete installation"
+            )
+
+        return not errored
 
     def set_installed_ipsec(self):
         ss_obj = StrongSwanConfig()
@@ -358,8 +372,10 @@ class MountIbmshare(MountHelperBase):
 
             if stunnel_requested:
                 self.lock()
-                self.set_installed_stunnel()
+                ret = self.set_installed_stunnel()
                 self.unlock()
+                if not ret:
+                    return False
             else:
                 self.set_installed_ipsec()
 

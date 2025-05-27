@@ -6,6 +6,9 @@ import os
 from datetime import datetime
 import shutil
 import filecmp
+from unittest.mock import MagicMock
+import tempfile
+from test_common import read_file, write_file, print_file_contents
 
 ACCEPT_IP = "127.0.0.1"
 ACCEPT_PORT = 10001
@@ -23,16 +26,24 @@ class TestStunnelConfigCreate(unittest.TestCase):
     def setUp(self):
         self.saved_stunnel_dir = StunnelConfigGet.STUNNEL_DIR_NAME
         self.saved_pid_file_dir = StunnelConfigGet.STUNNEL_PID_FILE_DIR
+        self.config_dir = tempfile.mkdtemp()
 
     def tearDown(self):
         StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
         StunnelConfigGet.STUNNEL_PID_FILE_DIR = self.saved_pid_file_dir
+        shutil.rmtree(self.config_dir)
 
     def write_working_sample(self, working_sample):
         buffer = (
             "# stunnel_identifier = /FACECE8985B6479F9EA06464DCFBAD68"
             "\n"
             "pid = /var/run/stunnel4/ibmshare_FACECE8985B6479F9EA06464DCFBAD68.pid"
+            "\n"
+            "log = overwrite"
+            "\n"
+            "output = /var/log/stunnel/ibmshare_FACECE8985B6479F9EA06464DCFBAD68.log"
+            "\n"
+            "debug = 5"
             "\n"
             "[ibmshare_FACECE8985B6479F9EA06464DCFBAD68]"
             "\n"
@@ -43,11 +54,11 @@ class TestStunnelConfigCreate(unittest.TestCase):
             "\n"
             "connect = 10.240.64.83:20049"
             "\n"
-            "verifyPeer = yes"
-            "\n"
             "verifyChain = yes"
             "\n"
-            "cafile = /etc/stunnel/allca.pem"
+            "checkHost = staging.is-share.appdomain.cloud"
+            "\n"
+            "cafile = /etc/ssl/tls.pem"
             "\n"
         )
 
@@ -80,17 +91,93 @@ class TestStunnelConfigCreate(unittest.TestCase):
             ACCEPT_IP, ACCEPT_PORT, CONNECT_IP, CONNECT_PORT, REMOTE_PATH
         )
         s.filepath = "/tmp"
+        s.get_trusted_ca_file = MagicMock(return_value="/tmp/file.conf")
         s.write_file()
         self.assertEqual(s.is_valid(), False)
         res = s.get_error().startswith(StunnelConfigCreate.WRITE_ERROR)
         self.assertEqual(res, True)
+
+    def test_get_trusted_ca_file(self):
+        config_dir = self.config_dir
+        made_up_file_name = "/etc/ssl/tls.pem"
+        # Good file has the key value pair and bad does not.
+        good_file = os.path.join(config_dir, "good_file.conf")
+        bad_file = os.path.join(config_dir, "bad_file.conf")
+        good_content = f"TRUSTED_ROOT_CACERT={made_up_file_name}"
+        bad_content = "This does not contain the content we are looking for"
+
+        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+
+        write_file(good_file, good_content)
+        write_file(bad_file, bad_content)
+        s = StunnelConfigCreate(
+            ACCEPT_IP, ACCEPT_PORT, CONNECT_IP, CONNECT_PORT, REMOTE_PATH
+        )
+
+        ret = s.get_trusted_ca_file(good_file, StunnelConfigGet.CA_FILE_KEY)
+        self.assertEqual(ret, made_up_file_name)
+        self.assertEqual(s.is_valid(), True)
+        ret = s.get_trusted_ca_file(bad_file, StunnelConfigGet.CA_FILE_KEY)
+        self.assertEqual(ret, None)
+        self.assertEqual(s.is_valid(), False)
+
+    def run_get_stunnel_env_test(self, stunnel_obj, magic_method, expected_return):
+        stunnel_obj.get_from_config_file = magic_method
+        ret = stunnel_obj.get_stunnel_env()
+        self.assertEqual(ret, expected_return)
+
+    def test_get_stunnel_env(self):
+        s = StunnelConfigCreate(
+            ACCEPT_IP, ACCEPT_PORT, CONNECT_IP, CONNECT_PORT, REMOTE_PATH
+        )
+
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_DEV.upper()),
+            StunnelConfigGet.STUNNEL_ENV_DEV,
+        )
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_DEV.lower()),
+            StunnelConfigGet.STUNNEL_ENV_DEV,
+        )
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_STAGE.lower()),
+            StunnelConfigGet.STUNNEL_ENV_STAGE,
+        )
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_STAGE.upper()),
+            StunnelConfigGet.STUNNEL_ENV_STAGE,
+        )
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_PROD.lower()),
+            StunnelConfigGet.STUNNEL_ENV_PROD,
+        )
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value=StunnelConfigGet.STUNNEL_ENV_PROD.upper()),
+            StunnelConfigGet.STUNNEL_ENV_PROD,
+        )
+
+        ## Test for default.
+        self.run_get_stunnel_env_test(
+            s,
+            MagicMock(return_value="not dev or stage"),
+            StunnelConfigGet.STUNNEL_ENV_PROD,
+        )
+        self.run_get_stunnel_env_test(
+            s, MagicMock(return_value=None), StunnelConfigGet.STUNNEL_ENV_PROD
+        )
 
     def test_write_file_success(self):
         StunnelConfigGet.STUNNEL_DIR_NAME = "/etc/stunnel"
         s = StunnelConfigCreate(
             ACCEPT_IP, ACCEPT_PORT, CONNECT_IP, CONNECT_PORT, REMOTE_PATH
         )
-        config_dir = tempfile.mkdtemp()
+        config_dir = self.config_dir
 
         conf_filepath = s.filepath
 
@@ -98,18 +185,18 @@ class TestStunnelConfigCreate(unittest.TestCase):
         StunnelConfigGet.STUNNEL_PID_FILE_DIR = "/var/run/stunnel4"
         generated_file = os.path.join(config_dir, "generated.int.conf")
         s.filepath = generated_file
+        s.get_trusted_ca_file = MagicMock(return_value="/etc/ssl/tls.pem")
+        s.get_stunnel_env = MagicMock(return_value="staging")
         s.write_file()
         cleaned_file = os.path.join(config_dir, "generated.conf")
         working_sample = os.path.join(config_dir, "working_sample")
         self.write_working_sample(working_sample)
         self.remove_conf_header(generated_file, cleaned_file)
         self.assertEqual(conf_filepath, PRE_GENERATED_CONFIG_FILE_NAME)
-
         cmp = self.compare_files(cleaned_file, working_sample)
         self.assertEqual(cmp, True)
         self.assertEqual(s.is_valid(), True)
         self.assertEqual(s.get_error(), None)
-        shutil.rmtree(config_dir)
 
 
 if __name__ == "__main__":

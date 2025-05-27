@@ -5,7 +5,7 @@ This project is licensed under the MIT License, see LICENSE file in the root dir
 ```
 
 # Mount Helper
-Mount helper is an open source automation tool that helps to establish secure IPsec connection between customer virtual server instance (VSI) and storage server. The mount helper ensures that the communication between the customer VSI and the file share is encrypted in transit.
+Mount helper is an open source automation tool that helps to establish secure IPsec and stunnel connection between customer virtual server instance (VSI) and storage server. The mount helper ensures that the communication between the customer VSI and the file share is encrypted in transit.
 
 For more information, see the [IBM Cloud File Share Mount Helper utility](https://cloud.ibm.com/docs/vpc?topic=vpc-file-storage-vpc-eit&interface=ui#fs-mount-helper-utility) topic in the IBM Cloud Docs.
 
@@ -72,7 +72,12 @@ curl -LO https://github.com/IBM/vpc-file-storage-mount-helper/releases/download/
 ```
 3. Then install use script,
 ```
-./install.sh
+For dev and staging users, it is necessary to export STUNNEL_ENV variable before running ./install.sh
+export STUNNEL_ENV=dev # For development environment users
+export STUNNEL_ENV=staging # For staging environenment users.
+There is no need for this export for production users.
+./install.sh  ( For zonal share to install just Ipsec)
+./install.sh --stunnel ( For regional share to install both ipsec and stunnel)
 ```
 4. Few tips to verify installation
     - Check for file /sbin/mount.ibmshare, if the file is not found then installation must have failed. Check the logs and fix/report.

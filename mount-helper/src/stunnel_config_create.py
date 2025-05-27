@@ -23,6 +23,53 @@ class StunnelConfigCreate:
         self.error = None
         self.filepath = StunnelConfigGet.get_config_file_from_remote_path(remote_path)
 
+    def get_stunnel_env(
+        self,
+        conf_file_name=StunnelConfigGet.CONFIG_FILE_NAME,
+        key_name=StunnelConfigGet.STUNNEL_ENV_KEY,
+    ):
+        value = self.get_from_config_file(conf_file_name, key_name)
+        if value is not None:
+            value = value.lower()
+
+        # Prod users dont need to set this.
+        if (
+            value == StunnelConfigGet.STUNNEL_ENV_DEV
+            or value == StunnelConfigGet.STUNNEL_ENV_STAGE
+        ):
+            ret = value
+        else:
+            ret = StunnelConfigGet.STUNNEL_ENV_PROD
+
+        return ret
+
+    def get_trusted_ca_file(
+        self,
+        conf_file_name=StunnelConfigGet.CONFIG_FILE_NAME,
+        key_name=StunnelConfigGet.CA_FILE_KEY,
+    ):
+        return self.get_from_config_file(conf_file_name, key_name)
+
+    # Extract the value from the key value in conf file.
+    def get_from_config_file(self, conf_file_name, key_name):
+        value = None
+        self.valid = True
+        try:
+            with open(conf_file_name, "r") as file:
+                for line in file:
+                    if line.lstrip().startswith(key_name):
+                        value = line.split("=", 1)[1]
+        except Exception as e:
+            self.valid = False
+            self.error = f"Could not read from {conf_file_name} due to exception {e}"
+
+        if value is None:
+            self.valid = False
+        else:
+            value = value.strip()
+
+        return value
+
     def write_file(self):
 
         if (
@@ -32,7 +79,13 @@ class StunnelConfigCreate:
             or not self.connect_ip
             or not self.remote_path
         ):
+            self.error = f"Invalid args: accept_ip = '{self.accept_ip}' , accept_port = '{self.accept_port}' connect_port = '{self.connect_port}', connect_ip = '{self.connect_ip}', remote_path = '{self.remote_path}'"
             self.valid = False
+            return -1
+
+        self.valid = True
+        ca_file = self.get_trusted_ca_file()
+        if self.valid is False:
             return -1
 
         st_eyecatcher = StunnelConfigGet.get_sanitized_remote_path(self.remote_path)
@@ -40,6 +93,10 @@ class StunnelConfigCreate:
             StunnelConfigGet.get_pid_file_dir(), st_eyecatcher + ".pid"
         )
 
+        stunnel_env = self.get_stunnel_env()
+        log_file = os.path.join(
+            StunnelConfigGet.STUNNEL_LOG_DIR, st_eyecatcher + ".log"
+        )
         buffer = (
             "########################################################################"
             "\n"
@@ -53,6 +110,12 @@ class StunnelConfigCreate:
             "\n"
             f"pid = {pid_file_name}"
             "\n"
+            "log = overwrite"
+            "\n"
+            f"output = {log_file}"
+            "\n"
+            "debug = 5"
+            "\n"
             f"[{st_eyecatcher}]"
             "\n\n"
             "client = yes"
@@ -61,11 +124,11 @@ class StunnelConfigCreate:
             "\n"
             f"{StunnelConfigGet.STUNNEL_CONNECT} = {self.connect_ip}:{self.connect_port}"
             "\n"
-            "verifyPeer = yes"
-            "\n"
             "verifyChain = yes"
             "\n"
-            f"cafile = {StunnelConfigGet.TLS_CA_NAME}"
+            f"checkHost = {stunnel_env}.is-share.appdomain.cloud"
+            "\n"
+            f"cafile = {ca_file}"
             "\n"
         )
         filepath = self.filepath

@@ -12,8 +12,17 @@ class StunnelConfigGet:
     IBM_SHARE_SIG = "ibmshare"
     STUNNEL_DIR_NAME = "/etc/stunnel"
     STUNNEL_PID_FILE_DIR = "/var/run/stunnel4"
+    STUNNEL_LOG_DIR = "/var/log/stunnel"
     STUNNEL_CONF_EXT = ".conf"
     STUNNEL_IDENTIFIER = "stunnel_identifier"
+    CONFIG_FILE_NAME = "/etc/ibmcloud/share.conf"
+    CA_FILE_KEY = "TRUSTED_ROOT_CACERT"
+    STUNNEL_ENV_KEY = "STUNNEL_ENV"
+
+    STUNNEL_ENV_DEV = "dev"
+    STUNNEL_ENV_STAGE = "staging"
+    STUNNEL_ENV_PROD = "production"
+
     STUNNEL_ACCEPT = "accept"
     STUNNEL_CONNECT = "connect"
     FILE_NOT_FOUND_ERR = "StunnelConfigGet could not find the config_file"
