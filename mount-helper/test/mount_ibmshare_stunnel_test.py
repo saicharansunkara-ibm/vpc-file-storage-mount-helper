@@ -14,6 +14,7 @@ from stunnel_config_get import StunnelConfigGet
 from renew_certs import RenewCerts
 from args_handler import ArgsHandler
 import time
+import stat
 import subprocess
 import find_free_stunnel_port
 import logging
@@ -168,10 +169,10 @@ class TestMountIbmshare(unittest.TestCase):
     @mock.patch("subprocess.run")
     def test_start_stunnel(self, subprocess_handle):
         with patch.object(
-                StunnelConfigCreate,
-                "get_trusted_ca_file",
-                new=self.fake_get_trusted_ca_file,
-            ):
+            StunnelConfigCreate,
+            "get_trusted_ca_file",
+            new=self.fake_get_trusted_ca_file,
+        ):
             config_dir = tempfile.mkdtemp()
             StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
             StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
@@ -312,6 +313,7 @@ class TestMountIbmshare(unittest.TestCase):
         StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
         StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
         self.create_custom_conf_file(config_dir, config_filename, "9999999")
+
         dummy_error = DummyErrorObject()
         mis.RunCmd = MagicMock(return_value=dummy_error)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
@@ -325,6 +327,45 @@ class TestMountIbmshare(unittest.TestCase):
             config_dir,
             "ibmshare_C0FFEE" + StunnelConfigGet.STUNNEL_CONF_EXT,
         )
+
+    def test_configure_default_umask(self):
+
+        # Save mask to restore after running test.
+        saved_umask = os.umask(0)
+
+        test_umasks = [0, 0o22, 0o44, 0o55, 0o66, 0o77]
+
+        for mask in test_umasks:
+
+            mis = mount_ibmshare.MountIbmshare()
+            os.umask(mask)
+            # Umask should change due to the method invoked.
+            mis.configure_default_umask()
+            result = self.check_temp_file_permissions(
+                mount_ibmshare.MountIbmshare.DESIRED_DEFAULT_UMASK
+            )
+            self.assertEqual(result, True)
+
+        # Umask remains at whatever it was set to.
+        for mask in test_umasks:
+            os.umask(mask)
+            result = self.check_temp_file_permissions(mask)
+            self.assertEqual(result, True)
+
+        # Finally restore to original.
+        os.umask(saved_umask)
+
+    def check_temp_file_permissions(self, desired_umask):
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, "testfile.txt")
+        with open(file_path, "w") as temp_file_name:
+            file_stat = os.stat(file_path)
+            file_permissions = stat.S_IMODE(file_stat.st_mode)
+
+            expected_permissions = 0o666 & ~desired_umask
+            os.remove(file_path)
+        os.rmdir(temp_dir)
+        return file_permissions == expected_permissions
 
 
 class DummySuccessObject:
