@@ -34,17 +34,23 @@ deb-build:
 
 	mkdir -p $(BUILD_DIR)/DEBIAN
 
-	echo "Package: $(BUILD_DIR)" > $(CONTROL)
+	echo "Package: $(NAME)" > $(CONTROL)
 	echo "Version: $(APP_VERSION)" >> $(CONTROL)
 	echo "Maintainer: $(MAINTAINER)" >> $(CONTROL)
 	echo "Architecture: $(DEB_ARCH)" >> $(CONTROL)
 	echo "Description: $(DESCRIPTION)" >> $(CONTROL)
-	#echo "Depends: python3(>= $(MIN_PYTHON_VER)), strongswan-swanctl(>= $(MIN_STRONGSWAN_VER)), charon-systemd(>= $(MIN_STRONGSWAN_VER)), nfs-common" >> $(CONTROL)
 	echo "Depends: python3(>= $(MIN_PYTHON_VER)), nfs-common" >> $(CONTROL)
 
-	export DPKG_DEB_COMPRESS=xz
-
-	dpkg-deb --build $(BUILD_DIR)
+	# Build with explicit gzip compression using temp dir
+	TEMP_DEB_DIR=$$(mktemp -d /tmp/temp-ibm.XXXXXX) ; \
+	if [ -d "$$TEMP_DEB_DIR" ]; then \
+	    dpkg-deb -Zgzip -b $(BUILD_DIR) "$$TEMP_DEB_DIR" ; \
+	    mv "$$TEMP_DEB_DIR"/*.deb ./ ; \
+	    rm -rf "$$TEMP_DEB_DIR" ; \
+	else \
+	    echo "Error: Failed to create temporary directory" >&2 ; \
+	    exit 1 ; \
+	fi
 
 	cp *.deb ./install && rm -f *.deb
 	rm -rf $(BUILD_DIR)
