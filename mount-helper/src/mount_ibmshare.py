@@ -8,6 +8,7 @@ from args_handler import ArgsHandler
 from common import *
 import file_lock
 import os
+import stat
 import signal
 import timer_handler
 import traceback
@@ -22,6 +23,9 @@ STUNNEL_COMMAND = "stunnel"
 
 
 class MountIbmshare(MountHelperBase):
+
+    DESIRED_DEFAULT_UMASK = 0o22
+
     def __init__(self):
         self.mounts = []
         self.lockhandler = file_lock.LockHandler.mount_share_lock()
@@ -94,10 +98,24 @@ class MountIbmshare(MountHelperBase):
                 return True
         return False
 
+    def configure_default_umask(self):
+        # Need to call os.umask twice as the call returns previous seting of umask.
+        desired_default_umask = self.DESIRED_DEFAULT_UMASK
+        os.umask(desired_default_umask)
+        current_umask = os.umask(desired_default_umask)
+
+        return current_umask == desired_default_umask
+
     def process_stunnel_mount(self, args):
         ip_address = args.ip_address
         mount_path = args.mount_path
         config_file_found = False
+
+        if not self.configure_default_umask():
+            self.LogError(
+                f"Could not set umask to 0{self.DESIRED_DEFAULT_UMASK:o}. Aborting"
+            )
+            return false
 
         mounted = self.is_share_mounted(LOOPBACK_ADDRESS, mount_path)
         if mounted:
