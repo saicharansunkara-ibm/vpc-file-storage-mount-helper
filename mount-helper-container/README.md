@@ -6,9 +6,8 @@ This is a REST based mount-helper-container service which is used for mounting E
 
 | IKS/ROKS Version | Image/Distribution | Mount-Helper-Container Supported | 
 |------|-------|--------|
-| ROKS 4.16 | RHEL 8.10 | :heavy_check_mark: |
-| IKS 1.30 | Ubuntu 20.04, 24.04 | :heavy_check_mark: |
-| IKS 1.30 | Ubuntu 20.04, 24.04 | :heavy_check_mark: |
+| ROKS 4.16+ | [RHEL Versions](https://github.com/IBM/vpc-file-storage-mount-helper/tree/main/mount-helper/packages/rhel) | :heavy_check_mark: |
+| IKS 1.30+ | [Ubuntu Versions](https://github.com/IBM/vpc-file-storage-mount-helper/tree/main/mount-helper/packages/ubuntu) | :heavy_check_mark: |
 
 ## Changelog + Package Dependencies:
 
@@ -23,6 +22,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 | 0.0.8 | mount.ibmshare-0.0.9 | v0.1.2 | Feb 17, 2025 | - Changed mount.ibmshare dep to 0.0.8 (Fix bug with --update flag, VPC Region Naming convention, Add cert for dev) |
 | 0.0.9 | mount.ibmshare-0.1.0 | v0.1.3 | Feb 26, 2025 | - Changed mount.ibmshare dep to 0.0.9 (Add tls Cert for dev and stage) |
 | 0.1.0 | mount.ibmshare-0.1.1 | v0.1.4 | March 9, 2025 | - Changed mount.ibmshare dep to 0.1.0 (Add Cert for Montreal Prod) |
+| 0.1.1 | mount.ibmshare-0.1.7 | v0.2.0 | July 30, 2025 | - Changed mount.ibmshare dep to 0.1.0 (Add Support fo RHEL 9.6 + Mh misc changes https://github.com/IBM/vpc-file-storage-mount-helper/compare/0.1.4...0.1.9) |
 
 ## Package Building
 
