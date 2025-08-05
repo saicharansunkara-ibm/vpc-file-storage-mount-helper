@@ -18,7 +18,7 @@ export LINT_VERSION="1.43.0"
 GOPACKAGES=$(shell go list ./... | grep -v /vendor/ | grep -v /tests)
 
 NAME := mount-helper-container
-APP_VERSION := 0.1.1
+APP_VERSION := 0.1.2
 MAINTAINER := "IKS Storage"
 DESCRIPTION := "IBM Mount-helper-container service"
 LICENSE := "IBM"
@@ -46,12 +46,12 @@ deb-build: build-linux
 	cp install/postinst.sh $(BUILD_DIR)/DEBIAN/postinst
 	cp install/prerm.sh $(BUILD_DIR)/DEBIAN/prerm
 
-	echo "Package: $(BUILD_DIR)" > $(DEBIAN_CONTROL)
+	echo "Package: $(NAME)" > $(DEBIAN_CONTROL)
 	echo "Version: $(APP_VERSION)" >> $(DEBIAN_CONTROL)
 	echo "Maintainer: $(MAINTAINER)" >> $(DEBIAN_CONTROL)
 	echo "Architecture: $(DEB_ARCH)" >> $(DEBIAN_CONTROL)
 	echo "Description: $(DESCRIPTION)" >> $(DEBIAN_CONTROL)
-	echo "Depends: mount.ibmshare-0.1.7" >> $(DEBIAN_CONTROL)
+	echo "Depends: mount.ibmshare (= 0.1.7)" >> $(DEBIAN_CONTROL)
 
 	dpkg-deb --build $(BUILD_DIR)
 	rm -rf $(BUILD_DIR)
