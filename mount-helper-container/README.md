@@ -23,6 +23,7 @@ This is a REST based mount-helper-container service which is used for mounting E
 | 0.0.9 | mount.ibmshare-0.1.0 | v0.1.3 | Feb 26, 2025 | - Changed mount.ibmshare dep to 0.0.9 (Add tls Cert for dev and stage) |
 | 0.1.0 | mount.ibmshare-0.1.1 | v0.1.4 | March 9, 2025 | - Changed mount.ibmshare dep to 0.1.0 (Add Cert for Montreal Prod) |
 | 0.1.1 | mount.ibmshare-0.1.7 | v0.2.0 | July 30, 2025 | - Changed mount.ibmshare dep to 0.1.0 (Add Support fo RHEL 9.6 + Mh misc changes https://github.com/IBM/vpc-file-storage-mount-helper/compare/0.1.4...0.1.9) |
+| 0.1.2 | mount.ibmshare-0.1.7 | v0.2.1 | August 5, 2025 | - Fixed bug in deb control file |
 
 ## Package Building
 
