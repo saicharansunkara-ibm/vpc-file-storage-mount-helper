@@ -513,11 +513,12 @@ class MountHelperBase(MountHelperLogger):
     
     def detect_virtualization(self):
         try:
-            result = subprocess.run(
-            ['systemd-detect-virt'],
-            capture_output=True,
-            text=True
-             )
+            kwargs = {}
+            if sys.version_info >= (3, 7):
+                kwargs.update(capture_output=True, text=True)
+            else:
+                kwargs.update(stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            result = subprocess.run(['systemd-detect-virt'], **kwargs)
             type = result.stdout.strip()
             if result.returncode == 0:
                 return "virtual"
@@ -525,7 +526,7 @@ class MountHelperBase(MountHelperLogger):
             # Exit code 1 means "no virtualization" = baremetal
                 return "baremetal"
             else:
-                self.LogError(f"Unexpected return code from systemd-detect-virt: {result.returncode}")
+                self.LogError(f"Unexpected return code from systemd-detect-virt: {result.returncode}({type})")
                 return "virtual"
         except FileNotFoundError:
             self.LogError("Error: 'systemd-detect-virt' not found. Are you on a systemd-based Linux system?")
