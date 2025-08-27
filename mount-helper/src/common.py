@@ -511,6 +511,36 @@ class MountHelperBase(MountHelperLogger):
             
         return None
 
+    def detect_virtualization(self):
+        try:
+            kwargs = {}
+            if sys.version_info >= (3, 7):
+                kwargs.update(capture_output=True, text=True)
+            else:
+                kwargs.update(
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                )
+            result = subprocess.run(["systemd-detect-virt"], **kwargs)
+            type = result.stdout.strip()
+            if result.returncode == 0:
+                return "virtual"
+            elif result.returncode == 1:
+                # Exit code 1 means "no virtualization" = baremetal
+                return "baremetal"
+            else:
+                self.LogError(
+                    f"Unexpected return code from systemd-detect-virt: {result.returncode}({type})"
+                )
+                return "virtual"
+        except FileNotFoundError:
+            self.LogError(
+                "Error: 'systemd-detect-virt' not found. Are you on a systemd-based Linux system?"
+            )
+            return "virtual"
+
+
 class SystemCtl(MountHelperBase):
     EXE_PATH = "/bin/systemctl"
     OS_PATH = "/etc/os-release"
@@ -621,10 +651,11 @@ class NfsMount(MountHelperBase):
     SOURCE_ARGS_LENGTH = 2
     MOUNT_LIST_NFS_CMD = ["mount", "-t nfs,nfs4"]
 
-    def __init__(self, ip=None, mount_path=None, mounted_at=None):
+    def __init__(self, ip=None, mount_path=None, mounted_at=None, mount_port=None):
         self.ip = ip
         self.mount_path = mount_path
         self.mounted_at = mounted_at
+        self.mount_port = mount_port
 
     def load_nfs_mounts(self):
         result = self.RunCmd(NfsMount.MOUNT_LIST_NFS_CMD, "ListNfsMounts")
@@ -652,8 +683,17 @@ class NfsMount(MountHelperBase):
                 ip, mount_path = NfsMount.extract_source(
                     mount_fields[NfsMount.NFS_PATH_INDEX]
                 )
+                port = self.get_mount_port(line)
                 if ip and mount_path:
-                    return NfsMount(ip, mount_path, mount_fields[NfsMount.MOUNTED_AT])
+                    return NfsMount(
+                        ip, mount_path, mount_fields[NfsMount.MOUNTED_AT], port
+                    )
+        return None
+
+    def get_mount_port(self, line):
+        match = re.search(r"port=(\d+)", line)
+        if match:
+            return match.group(1)
         return None
 
     @staticmethod

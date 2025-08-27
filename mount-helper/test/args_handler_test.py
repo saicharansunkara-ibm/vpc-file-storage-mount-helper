@@ -27,8 +27,10 @@ CMD = [
 
 CMD_WITH_STUNNEL = [
     "mount",
+    "-t",
+    "nfs4",
     "-o",
-    "opt1=val1,opt2=val2,val3,stunnel",
+    "sec=sys,opt1=val1,opt2=val2,val3,stunnel",
     "192.168.1.1:/path1",
     "/my_mount1",
 ]
@@ -49,6 +51,13 @@ def get_args(secure, extra=None):
 
 
 class TestArgsHandler(unittest.TestCase):
+
+    def test_stunnel_mount_cmd_line(self):
+        sys.argv = CMD_WITH_STUNNEL
+        ao = ArgsHandler()
+        ret = ao.parse()
+        cmd = ao.get_stunnel_mount_cmd_line(STUNNEL_PORT, STUNNEL_MOUNT_PATH)
+        self.check_validity_stunnel_mount_cmd(cmd)
 
     def test_mount_invalid_args(self):
         sys.argv = ["these", "are", "invalid", "args"]
@@ -182,13 +191,6 @@ class TestArgsHandler(unittest.TestCase):
         pattern = r".*$"
         ret = bool(re.search(pattern, mount_point))
         self.assertEqual(ret, True)
-
-    def test_stunnel_mount_cmd_line(self):
-        sys.argv = CMD_WITH_STUNNEL
-        ao = ArgsHandler()
-        ao.parse()
-        cmd = ao.get_stunnel_mount_cmd_line(STUNNEL_PORT, STUNNEL_MOUNT_PATH)
-        self.check_validity_stunnel_mount_cmd(cmd)
 
     def test_is_request_stunnel_true(self):
         sys.argv = CMD_WITH_STUNNEL

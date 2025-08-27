@@ -16,7 +16,7 @@ CONNECT_IP = "10.240.64.83"
 CONNECT_PORT = 20049
 REMOTE_PATH = "/FACECE8985B6479F9EA06464DCFBAD68"
 PRE_GENERATED_CONFIG_FILE_NAME = (
-    "/etc/stunnel/ibmshare_FACECE8985B6479F9EA06464DCFBAD68.conf"
+    "/etc/stunnel/ibmshare_FACECE8985B6479F9EA06464DCFBAD68_10-240-64-83.conf"
 )
 EYE_CATCHER = "ibmshare-C0FFEE"
 
@@ -37,15 +37,15 @@ class TestStunnelConfigCreate(unittest.TestCase):
         buffer = (
             "# stunnel_identifier = /FACECE8985B6479F9EA06464DCFBAD68"
             "\n"
-            "pid = /var/run/stunnel4/ibmshare_FACECE8985B6479F9EA06464DCFBAD68.pid"
+            f"pid = /var/run/stunnel4/ibmshare_FACECE8985B6479F9EA06464DCFBAD68_{ACCEPT_PORT}.pid"
             "\n"
             "log = overwrite"
             "\n"
-            "output = /var/log/stunnel/ibmshare_FACECE8985B6479F9EA06464DCFBAD68.log"
+            f"output = /var/log/stunnel/ibmshare_FACECE8985B6479F9EA06464DCFBAD68_{ACCEPT_PORT}.log"
             "\n"
-            "debug = 5"
+            "debug = 7"
             "\n"
-            "[ibmshare_FACECE8985B6479F9EA06464DCFBAD68]"
+            f"[ibmshare_FACECE8985B6479F9EA06464DCFBAD68_{ACCEPT_PORT}]"
             "\n"
             "\n"
             "client = yes"
