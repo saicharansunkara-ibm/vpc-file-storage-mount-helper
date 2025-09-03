@@ -76,6 +76,7 @@ class ArgsHandler(MountHelperBase):
         parser.error = parse_error
         parser.add_argument("Source", default="")  # nfs_host:path
         parser.add_argument("Destination", default="")  # mount point
+        parser.add_argument("-t", default="")
         parser.add_argument("-o", default="")
         args, _ = parser.parse_known_args()
         if is_error:

@@ -21,6 +21,9 @@ import logging
 from unittest.mock import patch
 
 STUNNEL_COMMAND = "stunnel"
+FAKE_IP_ADDRESS = "100.100.100.100"
+MOUNT_IP = "10.1.1.1"
+MOUNT_PATH = "/C0FFEE"
 
 
 class TestMountIbmshare(unittest.TestCase):
@@ -37,12 +40,17 @@ class TestMountIbmshare(unittest.TestCase):
         self.saved_pid_file_dir = (
             stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR
         )
+        config_dir = tempfile.mkdtemp()
+        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
+        StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
+        self.config_dir = config_dir
 
     def tearDown(self):
         stunnel_config_get.StunnelConfigGet.STUNNEL_DIR_NAME = self.saved_stunnel_dir
         stunnel_config_get.StunnelConfigGet.STUNNEL_PID_FILE_DIR = (
             self.saved_pid_file_dir
         )
+        self.delete_conf_files_dir(self.config_dir)
 
     def create_conf_files(self):
         config_dir = tempfile.mkdtemp()
@@ -62,6 +70,7 @@ class TestMountIbmshare(unittest.TestCase):
         mis.is_share_mounted = MagicMock(return_value=False)
         mis.RemoveFile = MagicMock(return_value=True)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
+        mis.pid_from_file = MagicMock(return_value=999999999)
         mis.cleanup_stale_conf(dirname=config_dir)
 
         # Kill pid and remove file should have been called as many times
@@ -78,6 +87,7 @@ class TestMountIbmshare(unittest.TestCase):
         mis.is_share_mounted = MagicMock(return_value=True)
         mis.RemoveFile = MagicMock(return_value=True)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
+        mis.pid_from_file = MagicMock(return_value=999999999)
         mis.cleanup_stale_conf(dirname=config_dir)
 
         # Kill pid and remove file should not have been called.
@@ -111,7 +121,7 @@ class TestMountIbmshare(unittest.TestCase):
             "\n"
             "accept = 127.0.0.1:12001"
             "\n"
-            "connect = 10.0.0.1:20049"
+            f"connect = {MOUNT_IP}:20049"
             "\n"
             "verifyPeer = yes"
             "\n"
@@ -122,30 +132,51 @@ class TestMountIbmshare(unittest.TestCase):
         )
         with open(config_filename, "w") as out_file:
             out_file.write(buffer)
+        return config_filename
 
     @mock.patch("os.kill")
     def test_kill_pid(self, os_kill_pid):
 
-        call_count_before = os_kill_pid.call_count
-        pid = "999999"
-        self.kill_pid(pid)
-        self.assertEqual(os_kill_pid.call_count, call_count_before + 1)
+        counter = 0
+        for pid in ["999999", "88888", "100000"]:
+            call_count_before = os_kill_pid.call_count
+            self.kill_pid(pid)
+            self.assertEqual(os_kill_pid.call_count, call_count_before + 1)
+            pid_from_call = os_kill_pid.call_args_list[counter][0][0]
+            counter += 1
+            self.assertEqual(str(pid_from_call), pid)
+            saved_pid = pid
 
-        pid_from_call = os_kill_pid.call_args_list[0][0][0]
-        self.assertEqual(str(pid_from_call), pid)
+        for pid in ["0", "-1", "xxxx", ""]:
+            call_count_before = os_kill_pid.call_count
+            self.kill_pid(pid)
+            self.assertEqual(os_kill_pid.call_count, call_count_before)
+            self.assertEqual(str(pid_from_call), saved_pid)
 
-        call_count_before = os_kill_pid.call_count
-        pid = "888888888"
-        self.kill_pid(pid)
-        self.assertEqual(os_kill_pid.call_count, call_count_before + 1)
-        call_count_before = os_kill_pid.call_count
+    def test_pid_from_file(self):
+        config_file_name = os.path.join(
+            self.config_dir,
+            "ibmshare_C0FFEE" + StunnelConfigGet.STUNNEL_CONF_EXT,
+        )
+        pidval = "1000"
+        conf_file = self.create_custom_conf_file(
+            self.config_dir, config_file_name, pidval
+        )
+        st = StunnelConfigGet()
+        st.parse_with_full_path(conf_file)
+        mis = mount_ibmshare.MountIbmshare()
+        ret = mis.pid_from_file(st.get_pid_file())
+        self.assertEqual(str(ret), pidval)
 
-        self.kill_pid("0")
-        self.assertEqual(os_kill_pid.call_count, call_count_before)
+        ret = mis.pid_from_file("non existant file")
+        self.assertEqual(ret, None)
 
-        call_count_before = os_kill_pid.call_count
-        self.kill_pid("99999", "BAD_EYE_CATHCER_KILL_PID_WILL_NOT_FIND_FILE")
-        self.assertEqual(os_kill_pid.call_count, call_count_before)
+        pidval = "-1"
+        conf_file = self.create_custom_conf_file(
+            self.config_dir, config_file_name, pidval
+        )
+        ret = mis.pid_from_file(st.get_pid_file())
+        self.assertEqual(ret, None)
 
     def kill_pid(self, pidval, eye_catcher="ibmshare_C0FFEE"):
         config_dir = tempfile.mkdtemp()
@@ -157,10 +188,13 @@ class TestMountIbmshare(unittest.TestCase):
         # Mock the DIR and PID dirs.
         StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
         StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
-        self.create_custom_conf_file(config_dir, config_filename, pidval)
+        conf_file = self.create_custom_conf_file(config_dir, config_filename, pidval)
+
+        st = StunnelConfigGet()
+        st.parse_with_full_path(conf_file)
 
         mis = mount_ibmshare.MountIbmshare()
-        mis.kill_stunnel_pid("/C0FFEE")
+        mis.kill_stunnel_pid(st)
         self.delete_conf_files_dir(config_dir)
 
     def fake_get_trusted_ca_file(self):
@@ -173,9 +207,6 @@ class TestMountIbmshare(unittest.TestCase):
             "get_trusted_ca_file",
             new=self.fake_get_trusted_ca_file,
         ):
-            config_dir = tempfile.mkdtemp()
-            StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
-            StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
             subprocess_handle.return_value.returncode = 0
             subprocess_handle.return_value = subprocess.CompletedProcess(
                 args=["dummy", "dummy"], returncode=0
@@ -186,19 +217,20 @@ class TestMountIbmshare(unittest.TestCase):
             self.assertEqual(1, subprocess_handle.call_count)
             self.assertEqual(subprocess_handle.call_args[0][0][0], STUNNEL_COMMAND)
             self.assertEqual(
-                os.path.join(config_dir, "ibmshare_C0FFEE.conf"),
+                os.path.join(self.config_dir, "ibmshare_C0FFEE_10-10-1-1.conf"),
                 subprocess_handle.call_args[0][0][1],
             )
 
             subprocess_handle.return_value = subprocess.CompletedProcess(
-                args=["stunnel", "Incorrect file name specified"],
+                args=["stunnel", "This_is_an_Incorrect_file_name.conf"],
                 returncode=99,
                 stdout="",
-                stderr="This error was simulated in a unit test".encode("utf-8"),
+                stderr="This error was intentionally simulated in a unit test".encode(
+                    "utf-8"
+                ),
             )
             ret = mis.start_stunnel(10001, "10.10.1.1", "/C0FFEE")
             self.assertEqual(ret, False)
-            self.delete_conf_files_dir(config_dir)
 
     def setup_mocks(self, mis, is_share_mounted=False):
 
@@ -207,6 +239,7 @@ class TestMountIbmshare(unittest.TestCase):
         mis.run_stunnel_mount_command = MagicMock(return_value=True)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
 
+        mis.configure_default_umask = MagicMock(return_value=True)
         dummy_success = DummySuccessObject()
         mis.RunCmd = MagicMock(return_value=dummy_success)
 
@@ -215,11 +248,8 @@ class TestMountIbmshare(unittest.TestCase):
     def test_process_stunnel_mount(
         self, find_free_stunnel_port_handle, subprocess_handle
     ):
-        config_dir = tempfile.mkdtemp()
-        config_filename = self.get_generic_config_filename(config_dir)
+        config_filename = self.get_generic_config_filename(self.config_dir)
         pidval = "99999999"
-        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
-        StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
         find_free_stunnel_port_handle.return_value = 20001
         subprocess_handle.return_value = subprocess.CompletedProcess(
             args=["stunnel", "All good"],
@@ -230,11 +260,44 @@ class TestMountIbmshare(unittest.TestCase):
 
         # Create config file.
 
-        sys.argv = ["mount", "-o", "stunnel", "10.1.1.1:/C0FFEE", "/mnt"]
+        sys.argv = ["mount", "-o", "stunnel", f"{MOUNT_IP}:{MOUNT_PATH}", "/mnt"]
         ao = ArgsHandler()
         ao.parse()
         args = ArgsHandler.get_mount_args()
         mis = mount_ibmshare.MountIbmshare()
+
+        # test that we fail if we cannot set the required umask.
+        mis.configure_default_umask = MagicMock(return_value=False)
+        ret = mis.process_stunnel_mount(args)
+        self.assertEqual(ret, False)
+
+        # test that we fail if we cannot find a free port for stunnel
+        self.setup_mocks(mis)
+        saved_port = find_free_stunnel_port_handle.return_value
+        find_free_stunnel_port_handle.return_value = -1
+        self.assertEqual(ret, False)
+        ret = mis.process_stunnel_mount(args)
+        self.assertEqual(ret, False)
+
+        # Undo incorrect setting.
+        find_free_stunnel_port_handle.return_value = saved_port
+
+        saved_config_dir = StunnelConfigGet.STUNNEL_PID_FILE_DIR
+        file_path = os.path.join(self.config_dir, "a_simple_file_for_testing")
+
+        # Set a file as a dir to simulate an error. And set it back.
+        self.setup_mocks(mis)
+        saved_pid_file_dir = StunnelConfigGet.get_pid_file_dir
+        StunnelConfigGet.get_pid_file_dir = MagicMock(return_value=file_path)
+        with open(file_path, "w"):
+            pass
+
+        ret = mis.process_stunnel_mount(args)
+        self.assertEqual(ret, False)
+        StunnelConfigGet.get_pid_file_dir = saved_pid_file_dir
+
+        # There is another test possible here. To make the pid_file_dir not writable.
+        # If the UID is root, it is always writable and the test fails. So skipping.
 
         # This section checks that start_stunnel and run_stunnel_mount_command are invoked
         # when there is no config file already present( from a previous setup)
@@ -248,54 +311,32 @@ class TestMountIbmshare(unittest.TestCase):
         ret = mis.process_stunnel_mount(args)
         self.assertEqual(ret, True)
 
-        self.assertEqual(mis.start_stunnel.call_count, 1)
-        self.assertEqual(mis.run_stunnel_mount_command.call_count, 1)
-        self.assertEqual(mis.kill_stunnel_pid.call_count, 0)
-
-        # This is a case where a user has deleted their conf file
-        # But the mount is present. Leave it alone.
-        # config_file_found = False is_share_mounted = True
-
-        self.setup_mocks(mis, is_share_mounted=True)
-        ret = mis.process_stunnel_mount(args)
-
-        self.assertEqual(mis.run_stunnel_mount_command.call_count, 0)
-        self.assertEqual(mis.start_stunnel.call_count, 0)
-        self.assertEqual(mis.kill_stunnel_pid.call_count, 0)
-
-        # This section tests if a config_file for the share being mounted but the
-        # actual mount is missing.
-        # Basically, the user has umounted a once mounted share.
-        # Test that the follwoing methods run once:
-        # kill_stunnel_pid, start_stunnel and run_stunnel_mount_command
-        # config_file_found = True is_share_mounted = false
-
-        # Make config_file_found = True
-        self.create_custom_conf_file(config_dir, config_filename, pidval)
-
-        self.setup_mocks(mis)
-
-        ret = mis.process_stunnel_mount(args)
-        self.assertEqual(ret, True)
-
         self.assertEqual(mis.run_stunnel_mount_command.call_count, 1)
         self.assertEqual(mis.start_stunnel.call_count, 1)
-        self.assertEqual(mis.kill_stunnel_pid.call_count, 1)
+        self.assertEqual(mis.kill_stunnel_pid.call_count, 0)
 
         # Config_file_found and share is mounted.
-        # Do nothing.
-        # config_file_found = True is_share_mounted = True
+        # Even if it is mounted, go head and make the mount call.
+        # If same mount point, it is ignored( by the os), but a different
+        # mount point still gets mounted.
 
+        # Create the conf file.
+        sc = StunnelConfigCreate("127.0.0.1", saved_port, MOUNT_IP, 20049, MOUNT_PATH)
+        sc.get_trusted_ca_file = MagicMock(return_value="")
+        sc.write_file()
+
+        self.setup_mocks(mis)
         self.setup_mocks(mis, is_share_mounted=True)
 
         ret = mis.process_stunnel_mount(args)
         self.assertEqual(ret, True)
 
-        self.assertEqual(mis.run_stunnel_mount_command.call_count, 0)
+        # Conf file is found.  So only call mounter
+
+        self.assertEqual(mis.run_stunnel_mount_command.call_count, 1)
+
         self.assertEqual(mis.start_stunnel.call_count, 0)
         self.assertEqual(mis.kill_stunnel_pid.call_count, 0)
-
-        self.delete_conf_files_dir(config_dir)
 
     @mock.patch("os.remove")
     def test_run_stunnel_mount_command(self, os_remove_handle):
@@ -303,24 +344,20 @@ class TestMountIbmshare(unittest.TestCase):
         dummy_success = DummySuccessObject()
         mis.RunCmd = MagicMock(return_value=dummy_success)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
-        ret = mis.run_stunnel_mount_command(10001, "/C0FFEE")
+        ret = mis.run_stunnel_mount_command(10001, "/C0FFEE", FAKE_IP_ADDRESS)
         self.assertEqual(mis.kill_stunnel_pid.call_count, 0)
         self.assertEqual(os_remove_handle.call_count, 0)
 
-        config_dir = tempfile.mkdtemp()
-        config_filename = self.get_generic_config_filename(config_dir)
+        config_filename = self.get_generic_config_filename(self.config_dir)
 
-        StunnelConfigGet.STUNNEL_DIR_NAME = config_dir
-        StunnelConfigGet.STUNNEL_PID_FILE_DIR = config_dir
-        self.create_custom_conf_file(config_dir, config_filename, "9999999")
+        self.create_custom_conf_file(self.config_dir, config_filename, "9999999")
 
         dummy_error = DummyErrorObject()
         mis.RunCmd = MagicMock(return_value=dummy_error)
         mis.kill_stunnel_pid = MagicMock(return_value=True)
-        ret = mis.run_stunnel_mount_command(10001, "/C0FFEE")
+        ret = mis.run_stunnel_mount_command(10001, "/C0FFEE", FAKE_IP_ADDRESS, True)
         self.assertEqual(mis.kill_stunnel_pid.call_count, 1)
         self.assertEqual(os_remove_handle.call_count, 1)
-        self.delete_conf_files_dir(config_dir)
 
     def get_generic_config_filename(self, config_dir):
         return os.path.join(
@@ -371,6 +408,7 @@ class TestMountIbmshare(unittest.TestCase):
 class DummySuccessObject:
     def __init__(self):
         self.stdout = "stdout".encode("utf-8")
+        self.stderr = "stderr".encode("utf-8")
         self.returncode = 0
 
     def get_error(self):
@@ -383,6 +421,7 @@ class DummySuccessObject:
 class DummyErrorObject:
     def __init__(self):
         self.stderr = "stderr".encode("utf-8")
+        self.stdout = "stdout".encode("utf-8")
         self.returncode = 1
 
     def get_error(self):

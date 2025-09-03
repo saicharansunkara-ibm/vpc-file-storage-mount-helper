@@ -44,31 +44,54 @@ class StunnelConfigGet:
         return StunnelConfigGet.STUNNEL_PID_FILE_DIR
 
     @staticmethod
-    def get_sanitized_remote_path(remote_path):
-        return StunnelConfigGet.IBM_SHARE_SIG + remote_path.replace("/", "_")
+    def get_sanitized_remote_path(remote_path, connect_ip_str=""):
+        path = StunnelConfigGet.IBM_SHARE_SIG + remote_path.replace("/", "_")
+        if len(connect_ip_str) > 0:
+            path = path + "_" + connect_ip_str.replace(".", "-")
+        return path
+
+    # Versions v1 and v2 only refer to the file name fomat.
+    # v2 name format has the ip address of the mount path embedded
+    @staticmethod
+    def get_v2_config_file_from_remote_path(remote_path, connect_ip):
+        if len(connect_ip) > 0:
+            connect_ip_str = str(connect_ip)
+        else:
+            connect_ip_str = ""
+
+        clean_name = StunnelConfigGet.get_sanitized_remote_path(
+            remote_path, connect_ip_str
+        )
+        return os.path.join(
+            StunnelConfigGet.STUNNEL_DIR_NAME,
+            clean_name + StunnelConfigGet.STUNNEL_CONF_EXT,
+        )
 
     @staticmethod
-    def get_config_file_from_remote_path(remote_path):
+    def get_v1_config_file_from_remote_path(remote_path):
         clean_name = StunnelConfigGet.get_sanitized_remote_path(remote_path)
         return os.path.join(
             StunnelConfigGet.STUNNEL_DIR_NAME,
             clean_name + StunnelConfigGet.STUNNEL_CONF_EXT,
         )
 
-    def open_with_remote_path(self, remote_path):
-        self.config_file = StunnelConfigGet.get_config_file_from_remote_path(
-            remote_path
+    def open_with_remote_path(self, remote_path, connect_ip):
+        v1_format = StunnelConfigGet.get_v1_config_file_from_remote_path(remote_path)
+        v2_format = StunnelConfigGet.get_v2_config_file_from_remote_path(
+            remote_path, connect_ip
         )
-        return self.open_with_full_path(self.config_file)
+        self.parse_with_full_path(v2_format)
+        if not self.found:
+            self.parse_with_full_path(v1_format)
 
-    def open_with_full_path(self, config_file):
+    def parse_with_full_path(self, config_file):
         self.config_file = config_file
         try:
             with open(config_file, "r") as file:
                 for line in file:
                     line = line.strip()
                     self.parse_lines(line)
-                self.found = True
+            self.found = True
         except FileNotFoundError as fne:
             self.error = f"{StunnelConfigGet.FILE_NOT_FOUND_ERR} : {fne}"
             self.found = False
@@ -87,6 +110,19 @@ class StunnelConfigGet:
             )
             if match:
                 self.remote_path = match.group(1)
+
+            else:
+                pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})"
+                match = re.search(pattern, line)
+                if match:
+                    ip = match.group(1)
+                    port = match.group(2)
+                    if f"{StunnelConfigGet.STUNNEL_CONNECT}" in line:
+                        self.connect_ip = ip
+                        self.connect_port = port
+                    elif f"{StunnelConfigGet.STUNNEL_ACCEPT}" in line:
+                        self.accept_ip = ip
+                        self.accept_port = port
 
     def get_pid_file(self):
         return self.pid_file

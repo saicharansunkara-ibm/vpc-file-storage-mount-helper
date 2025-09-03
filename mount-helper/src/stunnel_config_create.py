@@ -21,7 +21,11 @@ class StunnelConfigCreate:
         self.remote_path = remote_path
         self.valid = False
         self.error = None
-        self.filepath = StunnelConfigGet.get_config_file_from_remote_path(remote_path)
+        self.filepath = self.filepath = (
+            StunnelConfigGet.get_v2_config_file_from_remote_path(
+                remote_path, connect_ip
+            )
+        )
 
     def get_stunnel_env(
         self,
@@ -86,9 +90,12 @@ class StunnelConfigCreate:
         self.valid = True
         ca_file = self.get_trusted_ca_file()
         if self.valid is False:
+            self.error = f"get_trusted_ca_file failed. Please re-run install_stunnel.sh"
             return -1
 
-        st_eyecatcher = StunnelConfigGet.get_sanitized_remote_path(self.remote_path)
+        st_eyecatcher = StunnelConfigGet.get_sanitized_remote_path(
+            self.remote_path, str(self.accept_port)
+        )
         pid_file_name = os.path.join(
             StunnelConfigGet.get_pid_file_dir(), st_eyecatcher + ".pid"
         )
@@ -114,7 +121,7 @@ class StunnelConfigCreate:
             "\n"
             f"output = {log_file}"
             "\n"
-            "debug = 5"
+            "debug = 7"
             "\n"
             f"[{st_eyecatcher}]"
             "\n\n"

@@ -621,10 +621,11 @@ class NfsMount(MountHelperBase):
     SOURCE_ARGS_LENGTH = 2
     MOUNT_LIST_NFS_CMD = ["mount", "-t nfs,nfs4"]
 
-    def __init__(self, ip=None, mount_path=None, mounted_at=None):
+    def __init__(self, ip=None, mount_path=None, mounted_at=None, mount_port=None):
         self.ip = ip
         self.mount_path = mount_path
         self.mounted_at = mounted_at
+        self.mount_port = mount_port
 
     def load_nfs_mounts(self):
         result = self.RunCmd(NfsMount.MOUNT_LIST_NFS_CMD, "ListNfsMounts")
@@ -652,8 +653,17 @@ class NfsMount(MountHelperBase):
                 ip, mount_path = NfsMount.extract_source(
                     mount_fields[NfsMount.NFS_PATH_INDEX]
                 )
+                port = self.get_mount_port(line)
                 if ip and mount_path:
-                    return NfsMount(ip, mount_path, mount_fields[NfsMount.MOUNTED_AT])
+                    return NfsMount(
+                        ip, mount_path, mount_fields[NfsMount.MOUNTED_AT], port
+                    )
+        return None
+
+    def get_mount_port(self, line):
+        match = re.search(r"port=(\d+)", line)
+        if match:
+            return match.group(1)
         return None
 
     @staticmethod

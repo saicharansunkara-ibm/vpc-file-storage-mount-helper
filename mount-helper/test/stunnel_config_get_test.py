@@ -15,6 +15,9 @@ STUNNEL_PID_FILE_DIR = "/var/run/stunnel4"
 PID_FILE_BASENAME = "test_pid_file.pid"
 REMOTE_PATH = "/C0FFEE"
 PRE_GENERATED_CONFIG_FILE_NAME = "/etc/stunnel/ibmshare_C0FFEE.conf"
+PRE_GENERATED_100_100_100_100_CONFIG_FILE_NAME = (
+    "/etc/stunnel/ibmshare_C0FFEE_100-100-100-100.conf"
+)
 PRE_GENERATED_PID_FILE_NAME = "/var/run/stunnel4/ibmshare_C0FFEE.pid"
 EYE_CATCHER = "ibmshare-C0FFEE"
 
@@ -42,7 +45,7 @@ class TestStunnelConfigGet(unittest.TestCase):
     def test_open_with_full_path_is_a_directory(self):
         is_a_dir = "/tmp"
         s = StunnelConfigGet()
-        s.open_with_full_path(is_a_dir)
+        s.parse_with_full_path(is_a_dir)
 
         self.assertEqual(s.is_found(), False)
         err = s.get_error()
@@ -52,17 +55,25 @@ class TestStunnelConfigGet(unittest.TestCase):
     def test_open_with_full_path_non_existant(self):
         non_existant_file = "/it/is/a/non-existant/file/for/sure.conf"
         s = StunnelConfigGet()
-        s.open_with_full_path(non_existant_file)
+        s.parse_with_full_path(non_existant_file)
 
         self.assertEqual(s.is_found(), False)
         err = s.get_error()
         res = err.startswith(StunnelConfigGet.FILE_NOT_FOUND_ERR)
         self.assertEqual(res, True)
 
-    def test_get_config_file_from_remote_path(self):
+    def test_get_v1_config_file_from_remote_path(self):
         self.assertEqual(
             PRE_GENERATED_CONFIG_FILE_NAME,
-            StunnelConfigGet.get_config_file_from_remote_path(REMOTE_PATH),
+            StunnelConfigGet.get_v2_config_file_from_remote_path(REMOTE_PATH, ""),
+        )
+
+    def test_get_v2_config_file_from_remote_path(self):
+        self.assertEqual(
+            PRE_GENERATED_100_100_100_100_CONFIG_FILE_NAME,
+            StunnelConfigGet.get_v2_config_file_from_remote_path(
+                REMOTE_PATH, "100.100.100.100"
+            ),
         )
 
     def create_conf_file(self, config_filename):
@@ -111,7 +122,7 @@ class TestStunnelConfigGet(unittest.TestCase):
         self.create_conf_file(config_filename)
 
         s = StunnelConfigGet()
-        s.open_with_full_path(config_filename)
+        s.parse_with_full_path(config_filename)
 
         self.assertEqual(s.is_found(), True)
         self.assertEqual(s.get_error(), None)
