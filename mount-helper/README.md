@@ -84,9 +84,24 @@ There is no need for this export for production users.
     - Check strongswan status: systemctl status strongswan. This should be in active(running) state.
     - Check for config file: /etc/ibmcloud/share.conf
 
+## How to mount a zonal EIT share using ipsec
+Use the following command syntax to mount the share. Replace the mountpath with the information that is specific to your file share.
+```
+mount -t ibmshare -o secure=true <MOUNT_PATH> <MOUNT_POINT>
+```
+
+## How to mount a regional EIT share using stunnel
+Use the following command syntax to mount the share. Replace the mountpath with the information that is specific to your file share.
+```
+mount -t ibmshare -o stunnel <MOUNT_PATH> <MOUNT_POINT>
+```
+
 ## Supported Platform:
-1. RedHat versions 7, 8, 9
-2. Ubuntu versions 20, 22
+1. RedHat versions 8, 9
+2. Ubuntu versions 20, 22, 24
+3. CentOS versions 9,10
+4. Debian versions 10,11,12
+5. Rocky linux 8,9
 
 ## How to update packages:
 1. Uninstall currently installed package
