@@ -15,7 +15,7 @@ class StunnelConfigGet:
     STUNNEL_LOG_DIR = "/var/log/stunnel"
     STUNNEL_CONF_EXT = ".conf"
     STUNNEL_IDENTIFIER = "stunnel_identifier"
-    CONFIG_FILE_NAME = "/etc/ibmcloud/share.conf"
+    SHARE_CONFIG_FILE = "/etc/ibmcloud/share.conf"
     CA_FILE_KEY = "TRUSTED_ROOT_CACERT"
     STUNNEL_ENV_KEY = "STUNNEL_ENV"
 

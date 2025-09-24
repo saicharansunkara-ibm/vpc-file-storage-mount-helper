@@ -122,7 +122,7 @@ class TestStunnelConfigCreate(unittest.TestCase):
         self.assertEqual(s.is_valid(), False)
 
     def run_get_stunnel_env_test(self, stunnel_obj, magic_method, expected_return):
-        stunnel_obj.get_from_config_file = magic_method
+        stunnel_obj.get_from_ibmshare_config = magic_method
         ret = stunnel_obj.get_stunnel_env()
         self.assertEqual(ret, expected_return)
 

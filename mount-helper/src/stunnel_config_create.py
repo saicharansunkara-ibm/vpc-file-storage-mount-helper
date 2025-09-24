@@ -29,10 +29,10 @@ class StunnelConfigCreate:
 
     def get_stunnel_env(
         self,
-        conf_file_name=StunnelConfigGet.CONFIG_FILE_NAME,
+        conf_file_name=StunnelConfigGet.SHARE_CONFIG_FILE,
         key_name=StunnelConfigGet.STUNNEL_ENV_KEY,
     ):
-        value = self.get_from_config_file(conf_file_name, key_name)
+        value = self.get_from_ibmshare_config(conf_file_name, key_name)
         if value is not None:
             value = value.lower()
 
@@ -49,13 +49,13 @@ class StunnelConfigCreate:
 
     def get_trusted_ca_file(
         self,
-        conf_file_name=StunnelConfigGet.CONFIG_FILE_NAME,
+        conf_file_name=StunnelConfigGet.SHARE_CONFIG_FILE,
         key_name=StunnelConfigGet.CA_FILE_KEY,
     ):
-        return self.get_from_config_file(conf_file_name, key_name)
+        return self.get_from_ibmshare_config(conf_file_name, key_name)
 
     # Extract the value from the key value in conf file.
-    def get_from_config_file(self, conf_file_name, key_name):
+    def get_from_ibmshare_config(self, conf_file_name, key_name):
         value = None
         self.valid = True
         try:

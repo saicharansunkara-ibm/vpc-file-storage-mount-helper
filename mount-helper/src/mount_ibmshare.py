@@ -70,6 +70,16 @@ class MountIbmshare(MountHelperBase):
         self.LogError("Installation failed.", code=SysApp.ERR_APP_INSTALL)
         return False
 
+    def is_ppc(self):
+        try:
+            answer = subprocess.run(
+                ["uname", "-m"], capture_output=True, text=True, check=True
+            ).stdout.strip()
+            return answer.startswith("ppc")
+        except subprocess.CalledProcessError as e:
+            self.LogError(f"Cannot fetch architecture due to exception {e}")
+            return False
+
     def app_teardown(self):
         self.LogDebug("TearDown starting")
         ipsec = self.get_ipsec_mgr()
@@ -182,7 +192,9 @@ class MountIbmshare(MountHelperBase):
                     # when that happens on sunnel, mount forces itself on one of the two stunnel accept ports.
                     if not mounted:
 
-                        self.LogInfo(f"{full_file_name} has no mounts associated with it. Killing stunnel process")
+                        self.LogInfo(
+                            f"{full_file_name} has no mounts associated with it. Killing stunnel process"
+                        )
                         self.kill_stunnel_pid(st)
                         try:
                             self.RemoveFile(full_file_name)
@@ -309,6 +321,11 @@ class MountIbmshare(MountHelperBase):
                     ipsec.remove_config(args.ip_address)
                     ipsec.reload_config()
             else:
+                if self.is_ppc():
+                    self.LogError("Ipsec mounts are not suported on PPC")
+                    self.LogError("Use the -o stunnel option. Remove secure=true")
+                    return False
+
                 cert = RenewCerts()
                 if not cert.root_cert_installed():
                     self.LogError("Root Certificate must be installed.")
