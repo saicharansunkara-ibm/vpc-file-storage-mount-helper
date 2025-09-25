@@ -56,6 +56,7 @@ local stunnel_env="STUNNEL_ENV"
 
     # It is okay to store empty value.
     local value="$STUNNEL_ENV"
+
     sed -i.bak "/${stunnel_env}=/d"  "$CONF_FILE"
 
     if  ! grep -q $stunnel_env $CONF_FILE
@@ -77,8 +78,9 @@ local root_ca="TRUSTED_ROOT_CACERT"
 
 # Create necessary directories
 setup_stunnel_directories() {
-    sudo mkdir -p /var/run/stunnel4/ /etc/stunnel /var/log/stunnel
-    sudo chmod 744 /var/run/stunnel4/ /etc/stunnel /var/log/stunnel
+    DIR_LIST="/var/run/stunnel4/ /etc/stunnel /var/log/stunnel"
+    sudo mkdir -p $DIR_LIST
+    sudo chmod 744 $DIR_LIST
 }
 
 # Install stunnel on Ubuntu/Debian-based systems
@@ -92,6 +94,7 @@ install_stunnel_ubuntu_debian() {
 
     store_trusted_ca_file_name "/etc/ssl/certs/ca-certificates.crt"
     store_stunnel_env
+    store_arch_env
     # Verify installation
     if command -v stunnel > /dev/null; then
         echo "stunnel installed successfully!"
@@ -101,11 +104,22 @@ install_stunnel_ubuntu_debian() {
     fi
 }
 
+store_arch_env() {
+    local arch_env="ARCH_ENV"
+
+    local value="$(uname -m)"
+
+    sed -i.bak "/${arch_env}=/d"  "$CONF_FILE"
+
+    if  ! grep -q $arch_env $CONF_FILE
+    then
+        echo ${arch_env}="$value" >> $CONF_FILE
+    fi
+}
+
 # Install stunnel on Red Hat/CentOS/Rocky-based systems
 install_stunnel_rhel_centos_rocky() {
     echo "Starting installation of stunnel on Red Hat/CentOS/Rocky-based system..."
-    # Install EPEL repository if not already installed
-    sudo yum install -y epel-release
 
     # Install stunnel
     sudo yum install -y stunnel
@@ -114,6 +128,7 @@ install_stunnel_rhel_centos_rocky() {
 
     store_trusted_ca_file_name "/etc/pki/tls/certs/ca-bundle.crt"
     store_stunnel_env
+    store_arch_env
 
     # Verify installation
     if command -v stunnel > /dev/null; then

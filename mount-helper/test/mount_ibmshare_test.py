@@ -154,6 +154,14 @@ class TestMountIbmshare(unittest.TestCase):
         self.assertFalse(ret)
         self.assertEqual(o.ipsec.create_config.call_count, 1)
 
+    def test_ipsec_not_allowed_on_ppc(self, ocert):
+        mo = mount_ibmshare.MountIbmshare()
+        mo.is_ppc= MagicMock(return_value = True)
+        args = ArgsHandler.get_mount_args()
+        args.is_secure = True
+        ret = mo.mount(args)
+        self.assertFalse(ret)
+
     @mock.patch("os.path.isdir")
     def test_set_installed_stunnel(self, is_dir_handle, ignore_ocert):
         is_dir_handle.return_value = False

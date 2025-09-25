@@ -4,9 +4,11 @@
 # Project name: VPC File Storage Mount Helper
 # This project is licensed under the MIT License, see LICENSE file in the root directory.
 
+
 INSTALL_ARG="$1"
 INSTALL_MOUNT_OPTION_ARG="$2"
 STUNNEL_ENABLED=false
+CONF_FILE=/etc/ibmcloud/share.conf
 
 APP_NAME="IBM Mount Share Helper"
 SCRIPT_NAME="mount.ibmshare"
@@ -35,11 +37,11 @@ LINUX_FEDORA=("Fedora Linux"     $NA            $NA)
 LINUX_SUSE=("SLES"               "12"           "$ZYP")
 LINUX_RED_HAT=("Red Hat Enterprise Linux" "7" "$YUM")
 
-declare -A region_map=( 
+declare -A region_map=(
     ["dal"]="us-south"
-    ["us-south"]="us-south" 
+    ["us-south"]="us-south"
     ["lon"]="eu-gb"
-    ["eu-gb"]="eu-gb" 
+    ["eu-gb"]="eu-gb"
     ["fra"]="eu-de"
     ["eu-de"]="eu-de"
     ["syd"]="au-syd"
@@ -53,14 +55,25 @@ declare -A region_map=(
     ["mad"]="eu-es"
     ["eu-es"]="eu-es"
     ["tor"]="ca-tor"
-    ["ca-tor"]="ca-tor" 
+    ["ca-tor"]="ca-tor"
     ["sao"]="br-sao"
-    ["br-sao"]="br-sao" 
+    ["br-sao"]="br-sao"
     )
 
 
+not_for_ppc () {
+    echo $@ is not needed for PPC architechture since Ipsec is not supported. Silently ignoring.
+    # Make sure to return 0
+    return 0
+}
+
 log () {
     echo "$1"
+}
+
+isPPC () {
+    uname -m | grep -iq ppc
+    return $?
 }
 
 exit_err () {
@@ -69,7 +82,7 @@ exit_err () {
 }
 
 exit_ok () {
-    echo 
+    echo
     echo "$APP_NAME: $1."
     exit 0
 }
@@ -77,7 +90,7 @@ exit_ok () {
 check_linux_version () {
     MIN_VER=$1
     if [ "$MIN_VER" == "$NA" ]; then
-        exit_err "IbmMountHelper Install not supported $NAME"
+        exit_err "IbmMountHelper Install not supported $NAME" && return 0
         return 0
     fi;
 
@@ -122,13 +135,13 @@ command_exist () {
 }
 
 check_result () {
-  code="$?" 
+  code="$?"
   if [ $code != "0" ]; then
     exit_err "$1 ExitCode($code)"
   fi;
 }
 
-version_less_than() { 
+version_less_than() {
     ans="$(printf '%s\n%s\n' "$1" "$2" | sort -t '.' -k 1,1 -k 2,2 -k 3,3 -k 4,4 -g | head -n 1)"
     if [ "$ans" == "$2" ]; then
         return 1
@@ -136,17 +149,19 @@ version_less_than() {
     return 0
 }
 
-set_install_app() { 
+set_install_app() {
     LINUX_INSTALL_APP="$1"
     array=($LINUX_INSTALL_APP)
     INSTALL_APP=${array[0]}
     if command_not_exist "$INSTALL_APP"; then
         exit_err "Missing install app: $INSTALL_APP"
     fi;
-    echo "Using install app: $INSTALL_APP" 
+    echo "Using install app: $INSTALL_APP"
 }
 
-_remove_apps() { 
+_remove_apps() {
+
+    isPPC && not_for_ppc  "Uninstall stronswan related apps" && return 0
     apps=($@)
     $SBIN_SCRIPT -TEARDOWN_APP
     for ((i=${#apps[@]}-1; i>=0; i--)); do
@@ -228,6 +243,9 @@ check_available_version() {
 }
 
 setup_strongswan_restart_service() {
+
+    isPPC && not_for_ppc  "Strongswan restart service" && return 0
+
     # Define the systemd service unit content
     SERVICE_UNIT_CONTENT="[Unit]
     Description=Restart StrongSwan service and log the event
@@ -259,6 +277,8 @@ setup_strongswan_restart_service() {
 }
 
 remove_strongswan_restart_service() {
+
+    isPPC && not_for_ppc  "Strongswan remove restart service" && return 0
     # Check if systemd is available
     if [ "$(ps -p 1 -o comm=)" = "systemd" ] && systemctl > /dev/null 2>&1; then
         # Stop the service if it is running
@@ -278,7 +298,7 @@ remove_strongswan_restart_service() {
 }
 
 
-_install_app() { 
+_install_app() {
     PACKAGE_NAME=$1
     log "Installing package $PACKAGE_NAME"
     # Install the package with specific conditions for mount.ibmshare* packages
@@ -295,7 +315,7 @@ _install_app() {
     fi
     check_result "Problem installing package: $PACKAGE_NAME"
     log "Updating package $PACKAGE_NAME"
-    # Update the package 
+    # Update the package
     if [ "$LINUX_INSTALL_APP" == "$YUM" ]; then
         eval "yum update -y $PACKAGE_NAME"
     elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
@@ -305,7 +325,7 @@ _install_app() {
     fi
 }
 
-_install_apps() { 
+_install_apps() {
     apps=($@)
 
     if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ) && [[ "$INSTALL_ARG" != "--update" && "$INSTALL_ARG" != "--update-stage" ]]; then
@@ -317,7 +337,7 @@ _install_apps() {
 
     fi
 
-    for app in "${apps[@]}"; do 
+    for app in "${apps[@]}"; do
         if [[ (( "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--update-stage" )) && $app != "mount.ibmshare"* ]]; then
             continue
         fi
@@ -329,7 +349,7 @@ _install_apps() {
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
-                continue 
+                continue
             fi
             log "Installing package $app"
             if [[ $app == "mount.ibmshare"* || $app == *"python"* ]]; then
@@ -342,7 +362,7 @@ _install_apps() {
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
-                continue 
+                continue
             fi
             log "Installing package $app"
             if [[ $app == *"nfs-common"* ]]; then
@@ -360,7 +380,7 @@ _install_apps() {
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
-                continue 
+                continue
             fi
             log "Installing package $app"
             if [[ $app == mount.ibmshare* ]]; then
@@ -381,7 +401,7 @@ _install_apps() {
             # Read preInstalled packages from system
             if [[ $app != *"python"* && $(grep -q "^$app" $INSTALLED_PACKAGE_LIST; echo $?) -eq 0 ]] ; then
                 log "Skipping package $app for installation as it is pre-installed on the system"
-                continue 
+                continue
             fi
             log "Installing package $app"
             if [[ $app == mount.ibmshare* ]]; then
@@ -398,14 +418,16 @@ _install_apps() {
             fi
             _install_app "$app"
         else
-            _install_app "$app" 
+            _install_app "$app"
         fi
     done
 }
 
-install_apps() { 
+install_apps() {
+
+    #isPPC && not_for_ppc  "Install strongswan related packages " && return 0
     if [ "$INSTALL_ARG" == "--uninstall" ]; then
-        _remove_apps "$@" 
+        _remove_apps "$@"
         remove_strongswan_restart_service
         if is_linux LINUX_SUSE; then
            sudo systemctl unmask strongswan.service
@@ -416,7 +438,7 @@ install_apps() {
         fi
         exit_ok "UnInstall completed ok"
     fi
-    _install_apps "$@" 
+    _install_apps "$@"
 }
 
 get_current_python_version () {
@@ -424,7 +446,7 @@ get_current_python_version () {
 }
 
 wait_till_true () {
-    action="$1" 
+    action="$1"
     secs=$2
     echo "Wait: $1"
     for i in `seq 1 10`; do
@@ -433,13 +455,16 @@ wait_till_true () {
             return
         fi
         sleep $secs
-    done 
+    done
 }
 
 check_python3_installed () {
-    if command_exist cloud-init; then
-        log "Wait for cloud-init to complete."
-        cloud-init status --wait --long
+    if ! isPPC
+    then
+    	if command_exist cloud-init; then
+        	log "Wait for cloud-init to complete."
+        	cloud-init status --wait --long
+    	fi
     fi
 
     if is_linux LINUX_RED_HAT; then
@@ -463,27 +488,32 @@ check_python3_installed () {
 }
 
 disable_metadata () {
+    isPPC && not_for_ppc  "Disable metadata service" && return 0
+
     log "Disabling metadata service"
     sed -i 's/USE_METADATA_SERVICE = True/USE_METADATA_SERVICE = False/' $SBIN_SCRIPT
 }
 
 install_tls_certificates() {
-    CERT_PATH="$1"  
+
+    isPPC && not_for_ppc "Install tls service" && return 0
+
+    CERT_PATH="$1"
     if is_linux LINUX_UBUNTU &&  [[ "$VERSION" == 24.04 ]]; then
-        TLS_CERT_PATH="/usr/local/share/ca-certificates" 
+        TLS_CERT_PATH="/usr/local/share/ca-certificates"
         cp "$CERT_PATH"/* "$TLS_CERT_PATH/"
         if [ $? -eq 0 ]; then
             echo "CA certificates for TLS copied successfully to usr/local/share/ca-certificates."
         else
-            exit_err "Error: Failed to copy ca-certificates for TLS copied ."      
+            exit_err "Error: Failed to copy ca-certificates for TLS copied ."
         fi
         echo "Updating CA certificates..."
         sudo update-ca-certificates
         if [ $? -eq 0 ]; then
             echo "CA certificates updated successfully."
         else
-            exit_err "Error: Failed to update CA certificates."      
-        fi 
+            exit_err "Error: Failed to update CA certificates."
+        fi
     fi
     if { is_linux LINUX_RED_HAT && [[ "$VERSION" == 9.4 ]]; } || { is_linux LINUX_ROCKY && [[ "$VERSION" == 9.4 ]]; }; then
        TLS_CERT_PATH="/etc/pki/ca-trust/source/anchors"
@@ -503,22 +533,38 @@ install_tls_certificates() {
         if [ $? -eq 0 ]; then
             echo "CA certificates updated successfully."
         else
-            exit_err "Error: Failed to update CA certificates."      
+            exit_err "Error: Failed to update CA certificates."
         fi
     fi
 }
+
+touch_conf_file() {
+    sudo touch  "$CONF_FILE"
+    sudo chmod 744  "$CONF_FILE"
+}
+
+setup_share_config() {
+    DIR_NAME="/etc/ibmcloud"
+
+    sudo mkdir -p $DIR_NAME
+    sudo chmod 744 $DIR_NAME
+    touch_conf_file
+}
+
 init_mount_helper () {
+    setup_share_config
     if [[ "$INSTALL_ARG" == "region="* ]]; then
         region_code="${INSTALL_ARG#region=}"
         mapped_region="${region_map[$region_code]}"
         if [ -n "$mapped_region" ]; then
-            log "Updating config file: ./share.conf"
-            sed -i "s/region=.*/region=$mapped_region/" ./share.conf
+            log "Updating config file: $CONF_FILE"
+            sed -i "s/region=.*/region=$mapped_region/" $CONF_FILE
         else
             exit_err "Error: Invalid region code '$region_code'"
         fi
         INSTALL_ARG=""
     fi
+
     if [[ "$INSTALL_MOUNT_OPTION_ARG" == "stage" ]]; then
         exit_err "incorrect command, pass stage as first arg."
     fi
@@ -528,13 +574,18 @@ init_mount_helper () {
     if [[ "$INSTALL_ARG" == "stage" || "$INSTALL_ARG" == "--update-stage" ]]; then
         CERT_PATH="./dev_certs/metadata"
         log "Installing certs for stage environment..."
-        $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
-        check_result "Problem installing ssl certs"
-        if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
-            install_tls_certificates $CERT_PATH
+        if ! isPPC
+        then
+            $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
+            check_result "Problem installing ssl certs"
+            if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+                install_tls_certificates $CERT_PATH
+            fi
         fi
         exit_ok "Install completed ok"
     fi
+
+
     if [[ "$INSTALL_ARG" == "--stunnel" ]]; then
         STUNNEL_ENABLED=true
     fi
@@ -545,23 +596,26 @@ init_mount_helper () {
         INSTALL_ARG="metadata"
     fi
 
-    log "Installing certs for: $INSTALL_ARG"
-    CERT_PATH="./certs/$INSTALL_ARG"
-    if [ ! -d $CERT_PATH ]; then
-        exit_err "$CERT_PATH cert folder does not exist" 
-    fi
-    if [ "$INSTALL_ARG" != "metadata" ]; then
-        disable_metadata
-    fi
-    $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
-    check_result "Problem installing ssl certs"
-    if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
-      install_tls_certificates $CERT_PATH
+    if ! isPPC
+    then
+    	log "Installing certs for: $INSTALL_ARG"
+    	CERT_PATH="./certs/$INSTALL_ARG"
+    	if [ ! -d $CERT_PATH ]; then
+        	exit_err "$CERT_PATH cert folder does not exist"
+    	fi
+    	if [ "$INSTALL_ARG" != "metadata" ]; then
+        	disable_metadata
+    	fi
+    	$SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
+    	check_result "Problem installing ssl certs"
+    	if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+      		install_tls_certificates $CERT_PATH
+    	fi
     fi
     # Check if STUNNEL_ENABLED is set to true
     if [ "$STUNNEL_ENABLED" == "true" ]; then
         echo "STUNNEL is enabled. Installing stunnel..."
-    
+
         # Make sure the script exists
         if [ -x "./install_stunnel.sh" ]; then
             ./install_stunnel.sh install
@@ -575,7 +629,7 @@ init_mount_helper () {
 
 if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
     export DEBIAN_FRONTEND=noninteractive
-    check_python3_installed 
+    check_python3_installed
     apt-get -y remove needrestart
 
     # Define the path to the package list file based on the Ubuntu version or debian
@@ -591,7 +645,7 @@ if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
         PACKAGE_LIST_PATH="packages/debian/package_list"
     else
         PACKAGE_LIST_PATH="packages/ubuntu/$VERSION/package_list"
-    fi 
+    fi
 
     # Check if the package list file exists
     if [ ! -f "$PACKAGE_LIST_PATH" ]; then
@@ -600,9 +654,12 @@ if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
 
     # Read the package list from the file
     packages=()
-    while IFS= read -r line; do
-        packages+=("$line")
-    done < "$PACKAGE_LIST_PATH"
+        if ! isPPC
+	    then
+            while IFS= read -r line; do
+                packages+=("$line")
+            done < "$PACKAGE_LIST_PATH"
+	    fi
 
     # Install the packages in the defined order
     install_apps "${packages[@]}" mount.ibmshare*.deb
@@ -623,14 +680,17 @@ if is_linux LINUX_RED_HAT; then
 
         # Read the package list from the file
         packages=()
-        while IFS= read -r line; do
-            packages+=("$line")
-        done < "$PACKAGE_LIST_PATH"
+        if ! isPPC
+	    then
+        	while IFS= read -r line; do
+            	packages+=("$line")
+        	done < "$PACKAGE_LIST_PATH"
+	    fi
 
         # Install the packages in the defined order
         install_apps "${packages[@]}" mount.ibmshare*.rpm
         setup_strongswan_restart_service
-        init_mount_helper         
+        init_mount_helper
     else
         if [ "$INSTALL_ARG" != "--uninstall" ]; then
             yum install -y --nogpgcheck "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$MAJOR_VERSION.noarch.rpm"
@@ -653,9 +713,12 @@ if is_linux LINUX_CENTOS; then
 
     # Read the package list from the file
     packages=()
-    while IFS= read -r line; do
+    if ! isPPC
+	then
+        while IFS= read -r line; do
         packages+=("$line")
-    done < "$PACKAGE_LIST_PATH"
+        done < "$PACKAGE_LIST_PATH"
+    fi
 
     if [ "$INSTALL_ARG" != "--uninstall" ]; then
         sudo dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
@@ -664,7 +727,7 @@ if is_linux LINUX_CENTOS; then
     # Install the packages in the defined order
     install_apps "${packages[@]}" mount.ibmshare*.rpm
     setup_strongswan_restart_service
-    init_mount_helper         
+    init_mount_helper
 fi;
 
 if is_linux LINUX_ROCKY; then
@@ -675,7 +738,7 @@ if is_linux LINUX_ROCKY; then
 fi;
 
 if is_linux LINUX_SUSE; then
-    check_python3_installed 
+    check_python3_installed
     # causing install failures - so disable it
     systemctl disable --now packagekit
     install_apps strongswan nfs-client mount.ibmshare*.rpm
