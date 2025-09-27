@@ -58,6 +58,8 @@ declare -A region_map=(
     ["ca-tor"]="ca-tor"
     ["sao"]="br-sao"
     ["br-sao"]="br-sao"
+    ["par"]="eu-fr2"
+    ["eu-fr2"]="eu-fr2"
     )
 
 
@@ -71,8 +73,18 @@ log () {
     echo "$1"
 }
 
-isPPC () {
-    uname -m | grep -iq ppc
+ipsec_not_required () {
+    [[ -n "${DO_NOT_INSTALL_IPSEC+is_set}" ]]
+    return $?
+}
+
+is_ppc () {
+    uname -m | grep -iq "ppc"
+    return $?
+}
+
+reject_ipsec () {
+    is_ppc || ipsec_not_required
     return $?
 }
 
@@ -90,7 +102,7 @@ exit_ok () {
 check_linux_version () {
     MIN_VER=$1
     if [ "$MIN_VER" == "$NA" ]; then
-        exit_err "IbmMountHelper Install not supported $NAME" && return 0
+        exit_err "IbmMountHelper Install not supported $NAME"
         return 0
     fi;
 
@@ -161,9 +173,8 @@ set_install_app() {
 
 _remove_apps() {
 
-    isPPC && not_for_ppc  "Uninstall stronswan related apps" && return 0
     apps=($@)
-    $SBIN_SCRIPT -TEARDOWN_APP
+    reject_ipsec || $SBIN_SCRIPT -TEARDOWN_APP
     for ((i=${#apps[@]}-1; i>=0; i--)); do
         app="${apps[$i]}"
         log "Removing package $app"
@@ -244,8 +255,6 @@ check_available_version() {
 
 setup_strongswan_restart_service() {
 
-    isPPC && not_for_ppc  "Strongswan restart service" && return 0
-
     # Define the systemd service unit content
     SERVICE_UNIT_CONTENT="[Unit]
     Description=Restart StrongSwan service and log the event
@@ -278,7 +287,6 @@ setup_strongswan_restart_service() {
 
 remove_strongswan_restart_service() {
 
-    isPPC && not_for_ppc  "Strongswan remove restart service" && return 0
     # Check if systemd is available
     if [ "$(ps -p 1 -o comm=)" = "systemd" ] && systemctl > /dev/null 2>&1; then
         # Stop the service if it is running
@@ -321,7 +329,7 @@ _install_app() {
     elif [ "$LINUX_INSTALL_APP" == "$APT" ]; then
         eval "apt-get install --only-upgrade -y $PACKAGE_NAME"
     elif [ "$LINUX_INSTALL_APP" == "$ZYP" ]; then
-        eval "zypper update -y $PACKAGE_NAME"
+        eval "zypper update -y $(basename $PACKAGE_NAME .rpm)"
     fi
 }
 
@@ -425,12 +433,11 @@ _install_apps() {
 
 install_apps() {
 
-    #isPPC && not_for_ppc  "Install strongswan related packages " && return 0
     if [ "$INSTALL_ARG" == "--uninstall" ]; then
         _remove_apps "$@"
-        remove_strongswan_restart_service
+        reject_ipsec ||  remove_strongswan_restart_service
         if is_linux LINUX_SUSE; then
-           sudo systemctl unmask strongswan.service
+           reject_ipsec ||  sudo systemctl unmask strongswan.service
         fi
         # Check if stunnel is installed
         if command -v stunnel >/dev/null 2>&1; then
@@ -459,7 +466,7 @@ wait_till_true () {
 }
 
 check_python3_installed () {
-    if ! isPPC
+    if ! reject_ipsec
     then
     	if command_exist cloud-init; then
         	log "Wait for cloud-init to complete."
@@ -488,15 +495,12 @@ check_python3_installed () {
 }
 
 disable_metadata () {
-    isPPC && not_for_ppc  "Disable metadata service" && return 0
 
     log "Disabling metadata service"
     sed -i 's/USE_METADATA_SERVICE = True/USE_METADATA_SERVICE = False/' $SBIN_SCRIPT
 }
 
 install_tls_certificates() {
-
-    isPPC && not_for_ppc "Install tls service" && return 0
 
     CERT_PATH="$1"
     if is_linux LINUX_UBUNTU &&  [[ "$VERSION" == 24.04 ]]; then
@@ -552,7 +556,6 @@ setup_share_config() {
 }
 
 init_mount_helper () {
-    setup_share_config
     if [[ "$INSTALL_ARG" == "region="* ]]; then
         region_code="${INSTALL_ARG#region=}"
         mapped_region="${region_map[$region_code]}"
@@ -574,21 +577,15 @@ init_mount_helper () {
     if [[ "$INSTALL_ARG" == "stage" || "$INSTALL_ARG" == "--update-stage" ]]; then
         CERT_PATH="./dev_certs/metadata"
         log "Installing certs for stage environment..."
-        if ! isPPC
-        then
-            $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
-            check_result "Problem installing ssl certs"
-            if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
-                install_tls_certificates $CERT_PATH
-            fi
+        $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
+        check_result "Problem installing ssl certs"
+        if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+            install_tls_certificates $CERT_PATH
         fi
         exit_ok "Install completed ok"
     fi
 
 
-    if [[ "$INSTALL_ARG" == "--stunnel" ]]; then
-        STUNNEL_ENABLED=true
-    fi
     if [[ "$INSTALL_ARG" == "" || "$INSTALL_ARG" == "--update" || "$INSTALL_ARG" == "--tls" || "$INSTALL_ARG" == "--stunnel" ]]; then
         if [[ "$INSTALL_ARG" == "--tls" ]]; then
             INSTALL_MOUNT_OPTION_ARG="--tls"
@@ -596,21 +593,18 @@ init_mount_helper () {
         INSTALL_ARG="metadata"
     fi
 
-    if ! isPPC
-    then
-    	log "Installing certs for: $INSTALL_ARG"
-    	CERT_PATH="./certs/$INSTALL_ARG"
-    	if [ ! -d $CERT_PATH ]; then
-        	exit_err "$CERT_PATH cert folder does not exist"
-    	fi
-    	if [ "$INSTALL_ARG" != "metadata" ]; then
-        	disable_metadata
-    	fi
-    	$SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
-    	check_result "Problem installing ssl certs"
-    	if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
-      		install_tls_certificates $CERT_PATH
-    	fi
+   	log "Installing certs for: $INSTALL_ARG"
+    CERT_PATH="./certs/$INSTALL_ARG"
+    if [ ! -d $CERT_PATH ]; then
+        exit_err "$CERT_PATH cert folder does not exist"
+    fi
+    if [ "$INSTALL_ARG" != "metadata" ]; then
+        disable_metadata
+    fi
+    $SBIN_SCRIPT -INSTALL_ROOT_CERT $CERT_PATH
+    check_result "Problem installing ssl certs"
+    if [[ "$INSTALL_MOUNT_OPTION_ARG" == "--tls" ]]; then
+      	install_tls_certificates $CERT_PATH
     fi
     # Check if STUNNEL_ENABLED is set to true
     if [ "$STUNNEL_ENABLED" == "true" ]; then
@@ -627,9 +621,29 @@ init_mount_helper () {
     exit_ok "Install completed ok"
 }
 
+# main starts here.
+#
+if [[ "$INSTALL_ARG" == "--stunnel" ]]; then
+        STUNNEL_INSTALL_CMD="./install_stunnel.sh install"
+        STUNNEL_ENABLED=true
+else
+        STUNNEL_INSTALL_CMD="echo skipping stunnel..."
+
+fi
+
+
+reject_ipsec && setup_share_config
+
 if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
     export DEBIAN_FRONTEND=noninteractive
     check_python3_installed
+
+    if reject_ipsec
+    then
+        install_apps mount.ibmshare*.deb && $STUNNEL_INSTALL_CMD
+        exit $?
+    fi
+
     apt-get -y remove needrestart
 
     # Define the path to the package list file based on the Ubuntu version or debian
@@ -654,12 +668,9 @@ if ( is_linux LINUX_UBUNTU || is_linux LINUX_DEBIAN ); then
 
     # Read the package list from the file
     packages=()
-        if ! isPPC
-	    then
-            while IFS= read -r line; do
-                packages+=("$line")
-            done < "$PACKAGE_LIST_PATH"
-	    fi
+    while IFS= read -r line; do
+         packages+=("$line")
+    done < "$PACKAGE_LIST_PATH"
 
     # Install the packages in the defined order
     install_apps "${packages[@]}" mount.ibmshare*.deb
@@ -669,6 +680,13 @@ fi;
 
 if is_linux LINUX_RED_HAT; then
     check_python3_installed python3
+
+    if reject_ipsec
+    then
+        install_apps mount.ibmshare*.rpm && $STUNNEL_INSTALL_CMD
+        exit $?
+    fi
+
     if [ -d "$DOWNLOADED_RHEL_PACKAGE_PATH" ]; then
         # Define the path to the package list file based on the RHEL version
         PACKAGE_LIST_PATH="packages/rhel/$VERSION/package_list"
@@ -680,12 +698,9 @@ if is_linux LINUX_RED_HAT; then
 
         # Read the package list from the file
         packages=()
-        if ! isPPC
-	    then
-        	while IFS= read -r line; do
-            	packages+=("$line")
-        	done < "$PACKAGE_LIST_PATH"
-	    fi
+       	while IFS= read -r line; do
+            packages+=("$line")
+        done < "$PACKAGE_LIST_PATH"
 
         # Install the packages in the defined order
         install_apps "${packages[@]}" mount.ibmshare*.rpm
@@ -703,6 +718,11 @@ fi;
 
 if is_linux LINUX_CENTOS; then
     check_python3_installed python3
+    if reject_ipsec
+    then
+        install_apps mount.ibmshare*.rpm && $STUNNEL_INSTALL_CMD
+        exit $?
+    fi
     # Define the path to the package list file for CENTOS_STREAM
     PACKAGE_LIST_PATH="packages/centos_stream/$VERSION/package_list"
 
@@ -713,12 +733,9 @@ if is_linux LINUX_CENTOS; then
 
     # Read the package list from the file
     packages=()
-    if ! isPPC
-	then
-        while IFS= read -r line; do
+    while IFS= read -r line; do
         packages+=("$line")
-        done < "$PACKAGE_LIST_PATH"
-    fi
+    done < "$PACKAGE_LIST_PATH"
 
     if [ "$INSTALL_ARG" != "--uninstall" ]; then
         sudo dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
@@ -732,6 +749,12 @@ fi;
 
 if is_linux LINUX_ROCKY; then
     check_python3_installed python39
+    if reject_ipsec
+    then
+        install_apps mount.ibmshare*.rpm && $STUNNEL_INSTALL_CMD
+        exit $?
+    fi
+
     install_apps epel-release strongswan strongswan-sqlite nfs-utils mount.ibmshare*.rpm
     setup_strongswan_restart_service
     init_mount_helper
@@ -739,6 +762,11 @@ fi;
 
 if is_linux LINUX_SUSE; then
     check_python3_installed
+    if reject_ipsec
+    then
+        install_apps mount.ibmshare*.rpm && $STUNNEL_INSTALL_CMD
+        exit $?
+    fi
     # causing install failures - so disable it
     systemctl disable --now packagekit
     install_apps strongswan nfs-client mount.ibmshare*.rpm
