@@ -73,7 +73,11 @@ class MountIbmshare(MountHelperBase):
     def is_ppc(self):
         try:
             answer = subprocess.run(
-                ["uname", "-m"], capture_output=True, text=True, check=True
+                ["uname", "-m"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                check=True
             ).stdout.strip()
             return answer.startswith("ppc")
         except subprocess.CalledProcessError as e:
